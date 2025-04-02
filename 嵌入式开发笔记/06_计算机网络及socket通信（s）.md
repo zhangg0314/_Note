@@ -1,76 +1,68 @@
-# 		————网络基础概念————   
+# 		——网络基础概念——  
 
 # 		1.什么是互联网组成
 
-## 1.1.计算机网络的定义
+## 1.计算机网络的定义
 
-计算机网络的精确定义并未统一
+计算机网络的精确定义并未统一，下面是用的比较多的两个定义：
 
-- 以功能完善的网络软件及通信协议实现资源共享和信息传递的系统。
-- 以传输信息为基本目的，用通信线路和通信设备将多个计算机连接起来的计算机系统的集合。
+- 以功能完善的网络软件及通信协议实现资源共享和信息传递的系统
+- 以传输信息为基本目的，用通信线路和通信设备将多个计算机连接起来的计算机系统的集合
 
-## 1.2.计算机网络分类
+## 2.网络的分类
 
-### 1.2.1.作用范围分
+### 1.按作用范围分
 
-广域网
+广域网、城域网、局域网、个人区域网（如个人热点）
 
-城域网
+### 2.按网络使用者分
 
-局域网
+公用网，专用网（如军队使用的网络）
 
-个人区域网
+## 3.网络的组成
 
-### 1.2.2.网络使用者分
+**计算机网络的组成：**
 
-公用网，专用网（军队）
+​	由若干节点和连接这些节点的链路组成，这些节点可以是计算机，集线器，交换机或路由器等。
 
-## 1.3.网络的网络
+**互联网络的组成：**
 
-**计算机网络：**
+由多个网络通过路由器连接在一起，构成一个覆盖范围更大的计算机网络。也就是网络的网络。
 
-- 由若干节点和连接这些节点的链路组成
-- 节点可以是计算机，集线器，交换机或路由器等
+## 4.互联网介绍
 
-**互联网络：**
-
-- 多个网络通过路由器连接在一起，构成一个覆盖范围更大的计算机网络。
-- 网络的网络
-
-## 1.4.互联网
-
-- 全球最大的，开放的，由众多网络相互连接而成的特定互连网络。
+- 全球最大的，开放的，由众多网络相互连接而成的特定互连网络
 - 采用TCP/IP协议族作为通信规则
 - 前身是美国得ARPAnet（阿帕网）
 
-## 1.5.互联网得组成
+## 5.互联网的组成
 
 - **核心部分**，由网络路由器组成，路由器虽然也是计算机，但在网络中不能成为主机
 - **边缘部分**，由主机（又叫端系统）和集线器组成
 
-# 2.协议与划分层次
+# 2.协议与层次划分
 
-## 2.1.协议
+## 1.协议
 
-网络协议，简称协议，是为进行网络中得数据交互而建立得规则标准或约定。
+网络协议，简称协议，是为进行网络中的数据交互而建立得规则标准或约定。
 
-**三个组成要素**：
+**协议的三个组成要素**：
 
-- 语法：数据与控制信息的结构或格式。
-- 语义：需要发出何种控制信息，完成何种动作以及做出何种响应。
-- 同步：事件实现顺序的详细说明。
+- 语法：数据与控制信息的结构或格式，如编码格式。
+- 语义：需要发出何种控制信息，完成何种动作以及做出何种响应，如帧结构。
+- 同步：事件实现顺序的详细说明，如帧请求，帧应当。
 
-## 2.2.划分层次
+## 2.划分层次
 
 举例：两台主机通过网络传送文件。
 
-![image-20241004111424468](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20241004111424468.png)
+![image-20241004111424468](figure\image-20241004111424468.png)
 
 1. 将文件传送模块作为最高的一层
 2. 再设计一个通信服务模块层
 3. 网络接入模块：负责做与网络接口细节有关的工作，并为上层提供接入和通信服务。
 
-## 2.3.各层完成的主要功能
+## 3.各层完成的主要功能
 
 - **差错控制**：使相应层次对等方的通信更加可靠
 - **流量控制**：发送端的发送速率必须使接收端来得及接收，不要太快
@@ -78,19 +70,19 @@
 - **复用和分用**：发送端几个高层会话复用一条低层的连接，在接收端再进行分用。
 - **连接的建立和连接**：交互数据前先建立一条逻辑连接，数据传输结束后释放连接。
 
-## 2.4.计算机网络体系结构
+## 4.计算机网络体系结构
 
 - 网络体系结构是计算机网络的各层及其协议的集合，就是这个计算机网络及其构件所应完成的功能的精确定义（不涉及实现）。
 - 实现是遵循这种体系结构的前提下，用任何硬件或软件完成这些功能的问题。
 - 体系结构是抽象的，而实现则是具体的，是正真运行的计算机硬件和软件。
 
-# 		3.★★★OSI七层体系结构★★★
+# 		3.OSI七层体系结构（理论模型）
 
 （赢表回，船往叔屋）
 
-OSI开放互联参考模型。**虽然市场上未真正实现，但具有很大的参考价值，如zigbee的zstack协议栈**。
+OSI，即开放互联参考模型。**虽然市场上未真正实现，但具有很大的参考价值，如zigbee的zstack协议栈就是参考该七层模型的**。
 
-## 3.1.高层：负责主机之间的数据处理
+## 1.高层：负责主机之间的数据处理
 
 - **应用层**
   网络服务与最终应用的一个接口，为用户应用程序提供服务，定义了应用程序之间通信的协议和规则。
@@ -102,7 +94,7 @@ OSI开放互联参考模型。**虽然市场上未真正实现，但具有很大
   建立，管理，中止会话，负责主机间的数据传输
   会话：本地应用之间如何进行通信，比如微信支付时，微信与淘宝的通信。负责建立、管理和终止会话，允许不同机器上的用户之间建立和管理会话。
 
-## 3.2.低层：负责网络之间的数据传输
+## 2.低层：负责网络之间的数据传输
 
 - **传输层**
   定义传输数据的协议端口号，以及流控，差错校验,校验的是端口号以及复用和分用（端口号表明不同应用）。负责数据报的传输，向下透明，向上提高服务，负责的是端到端的传输服务
@@ -121,19 +113,20 @@ OSI开放互联参考模型。**虽然市场上未真正实现，但具有很大
   建立，维护，断开物理连接，传输比特流。
   主要负责传输比特流，实现设备间的物理连接
 
-# 		4.★★★TCP/IP及五层体系结构★★★
+# 		4.TCP/IP及五层体系结构（实际应用模型）
 
-## 4.1.TCP/IP四层协议体系结构
+## 1.TCP/IP四层协议体系结构
 
-![image-20241004115313973](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20241004115313973.png)
+![image-20241004115313973](figure\image-20241004115313973.png)
 
-以ip为内核，只考虑IP网络层以上的几层，不考虑ip下面的网络接口层具体的细节。所有才叫TCP/IP协议。设计理念：网络核心越简单越好。![image-20241004120252185](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20241004120252185.png)
+以 IP 为内核，只考虑 IP 网络层以上的几层，不考虑 IP 下面的网络接口层具体的细节。所有才叫TCP/IP协议。设计理念：网络核心越简单越好。
+![image-20241004120252185](figure\image-20241004120252185.png)
 
-## 4.2.TCP/IP体系结构的另一种表示
+## 2.TCP/IP体系结构的另一种表示
 
-现在互联网使用的TCP/IP体系结构已经发生演变，即某些应用程序可以直接使用IP层，或甚至直接使用最下面的网络接口层，比如Ping命令。![image-20241004115921120](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20241004115921120.png)
+现在互联网使用的 TCP/IP 体系结构已经发生演变，即某些应用程序可以直接使用IP层，或甚至直接使用最下面的网络接口层，比如Ping命令。![image-20241004115921120](figure\image-20241004115921120.png)
 
-## 4.3.五层体系结构
+## 3.五层体系结构
 
 真正现实中需要考虑到的。
 
@@ -168,7 +161,7 @@ OSI开放互联参考模型。**虽然市场上未真正实现，但具有很大
 
 # 5.IP地址
 
-## 5.1.表示方法
+## 1.表示方法
 
 **实质**:32位二进制数
 
@@ -178,7 +171,7 @@ OSI开放互联参考模型。**虽然市场上未真正实现，但具有很大
 
 3级结构（划分子网）：IP地址 ::={<网络号>，<子网号>，<主机号>}
 
-## 5.2.分类IP
+## 2.分类IP
 
 任意一个IP地址我们都可以迅速的得出类别，并计算得出网络号。
 
@@ -192,74 +185,76 @@ OSI开放互联参考模型。**虽然市场上未真正实现，但具有很大
 
 - E类：1111开头，保留240.x.x.x~
 
-## 5.3.分类IP优缺点
+## 3.分类IP优缺点
 
 1. **优点**：
 
    管理简单，使用方便，转发分组迅速，划分子网，灵活地使用。
 
 2. **缺点**：
-   设计上不合理：地址块太大，浪费了大量的地址,即使采用划分子网方法解决，也不能解决ip地址枯竭得问题。
-
+   1、设计上不合理，地址块太大，浪费了大量的地址。
+   2、即使采用划分子网方法解决，也不能解决 IP 地址枯竭得问题。
+   
 3. **划分子网仍然存在的缺点**：
-   C类可指派主机数才255-2，很少企业组织使用，所以C类地址被大量浪费,解决：无分类编址
+   C类可指派主机数才255-2，很少企业组织使用，所以C类地址被大量浪费。
+   解决：无分类编址
 
-## 5.4.无分类编址CIDR
+## 4.无分类编址 CIDR 
 
-### 5.4.1.CIDR
+### 1.CIDR
 
-**CIDR（classless inter-domain routing）无分类域间路由选择。**IP地址 :: = {<网络前缀>，<主机号>}，前缀n不固定，取值范围0~32
+- **CIDR（classless inter-domain routing）即无分类域间路由选择。**
+- IP地址 :: = {<网络前缀>，<主机号>}，前缀n不固定，取值范围0~32
+- 记法：斜线记法，a.b.c.d/n，如:128.14.35.7/20表示前20位为网络号
 
-记法：斜线记法，a.b.c.d/n，如:128.14.35.7/20
 
-### 5.4.2.子网掩码
+### 2.子网掩码
 
-**子网掩码**：网络位全1，主机位全0，由一连串1和接着的一连串0组成，而1的个数就是网络前缀的长度。
+**子网掩码**：
+	网络位全为1，主机位全为0，由一连串1和接着的一连串0组成，而1的个数就是网络前缀的长度。
 
-**目的**：让机器从IP地址迅速算出网络地址。
+**目的**：
+	让机器从 IP 地址迅速算出网络地址。直接进行按位与运输就能得出某个IP地址所属的网络号。
 
-## 5.5.特殊IP
+## 5.特殊IP
 
-- 多归属主机
-  当一个主机通过多个个网卡同时连接到多个个网络时，同时有多个ip地址，同时处于多个网络
+- **多归属主机**
+  当一个主机通过多个个网卡同时连接到多个个网络时，会同时有多个 ip 地址，也就同时处于多个网络之中，这样的主机叫做多归属主机。
+- **IP地址全0**
+  表示在本网络上的本主机，只能做源地址
+- **网络号全0,主机号为xx**
+  表示本网络上主机号为xx的主机，只能做源地址
+- **全1的IP地址**
+  因为路由器不转发，所以只能在本网络广播，只能做目的地址
+- **主机号全1，网络号为Y**
+  向网络Y广播，只能做目的地址
+- **127.xxxx**
+  本地软件环回测试，可以做目的和源地址
+- **总结**![image-20241004140827810](figure\image-20241004140827810.png)		
 
-- ![image-20241004140827810](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20241004140827810.png)
+## 6.IPV6的表示方法
 
-- 全0：在本网络上的本主机，只能做源地址
-
-- 网络号全0：本网络上主机号位x的主机，只能做源地址
-
-- 全1：因为路由器不转发，所以只能在本网络广播，只能做目的地址
-
-- 主机号全1,网络号为Y：向网络Y广播，只能做目的地址
-
-- 127.xxxx:(xxx非全0非全1的任何数)，本地软件环回测试	,可以做目的和源地址		
-
-## 5.6.IPV6的表示方法
-
-大小：占128位
-
-记法：冒号16进制，每两个字节一个冒号，
-
-0压缩（只能有一处地方压缩）：一连串的0可以用两个冒号表示。
+- **大小**：占128位
+- **记法**：冒号16进制，每隔两个字节加一个冒号，
+- **0压缩**（<u>只能有一处地方压缩</u>）：一连串的0可以用两个冒号表示。
 
 # 6.端口号
 
-## 6.1.进程间的通信
+## 1.进程间的通信
 
-![image-20241004143837204](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20241004143837204.png)
+![image-20241004143837204](figure\image-20241004143837204.png)
 
-## 6.2.协议端口号
+## 2.协议端口号
 
-网络层负责主机之间通信，而运输层负责应用层的进程之间通信
+### 传输协议
 
-**协议（全双工）**：TCP（不提供广播多播方式）,UDP
+​	网络层主要负责的是主机之间通信，而运输层负责的应用层的进程之间通信。运输层的协议是全双工的，有TCP（不提供广播多播方式），UDP协议。
 
-**传输协议数据单元（TPDU）：**
+### 传输协议数据单元（TPDU）
 
-TCP的叫TCP报文段，UDP叫UDP报文或用户数据段
+​	TCP的TPDU叫TCP报文段，UDP的TPDI叫UDP报文或用户数据段。
 
-![image-20241004145224297](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20241004145224297.png)
+![image-20241004145224297](figure\image-20241004145224297.png)
 
 ![image-20240613224933519](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20240613224933519.png)
 
@@ -267,7 +262,7 @@ TCP的叫TCP报文段，UDP叫UDP报文或用户数据段
 - 1024-49151：服务器登记端口
 - 49152-65535：客户端使用端口，暂用动态的，一般要回收
 
-## 6.3.Linux的BSD端口
+## 3.Linux的BSD端口
 
 BSD也是一个标准
 
@@ -277,21 +272,20 @@ BSD也是一个标准
 
 建议自己写的程序绑定端口号为5001~32768
 
-# 7.字节序
+# ——Linux网络编程——
 
-## 7.1.概念
+# 1.字节序
 
-字节序是指多字节数据在计算机内存中存储或者网络传输时个字节存储的顺序。
+## 1.介绍
 
-## 7.2.分类
+- 字节序是指多字节数据在计算机内存中存储或者网络传输时个字节存储的顺序。
 
-大端字节序，小段字节序
+- 大端字节序，小段字节序
 
-## 7.3.应用
+- 一般主机使用小端（方便进行进位加减），而网络中用大端（方便读取和位运算）
 
-一般主机使用小端（方便进行进位加减），而网络中用大端（方便读取和位运算）
 
-## 7.4.字节序转换
+## 2.字节序转换
 
 - **本机转网络**
 
@@ -309,11 +303,11 @@ BSD也是一个标准
   uint16_t ntohs(uint16_t hostshort);
   ```
 
-# 		8.socket套接字
+# 		2.socket套接字
 
-## 8.1.套接字概念及表示
+## 1.套接字概念及表示
 
-![image-20241004162119409](C:\Users\z3254406361\AppData\Roaming\Typora\typora-user-images\image-20241004162119409.png)
+![image-20241004162119409](figure\image-20241004162119409.png)
 
 **三元组**：【IP地址，端口号，协议】
 
@@ -1004,578 +998,3 @@ TCP实现传输文件:
 
 
 
-# ————SQLite3————
-
-# 1.什么是SQLite3？
-
-- lSQLite3是一种轻量级的关系型数据库管理系统（RDBMS），它以跨平台、零配置、服务器-less的方式存储数据。
-- lSQLite3不像其他常见的数据库管理系统，如MySQL或PostgreSQL那样需要一个独立的服务器进程，在应用程序内部直接操作文件来进行数据存储和读取。
-- lSQLite3非常适合于嵌入式设备和单机应用程序等场景，因为它不需要占用太多资源，也允许在不同的平台上运行。 此外，SQLite3支持大多数SQL语法，并且还提供了一些高级功能，如触发器、存储过程等。
-
-# 2.SQLite3优势
-
-- 跨平台性：SQLite3可以在多种操作系统和编程语言下使用，包括Windows、Linux、macOS、iOS、Android等。
-- 零配置：SQLite3的特点之一是不要求任何服务器或网络配置。只需将数据库文件嵌入应用程序即可轻松地访问数据
-- 体积小：SQLite3的核心库非常小，通常只有几百KB，因此非常适合在资源受限或空间受限的系统中使用
-- 支持SQL：SQLite3支持大多数标准SQL查询语言，使用户能够使用大多数传统数据库管理任务
-- ACID兼容：SQLite3支持ACID（原子性、一致性、隔离性和持久性）事务处理，确保数据始终处于一致状态
-- 高可靠性：SQLite3对于频繁读取和少量更新的场景，表现出色。由于其自动记录更改，以防止损坏和数据丢失
-- 强大的API：SQLite3提供了一个简单易用的C语言API来操作数据库，同时也提供了大量的接口和工具
-- 可扩展性：SQLite3允许用户创建自己的函数和存储过程，从而增加了其灵活性和可扩展性
-
-# 3.下载及安装SQLite3
-
-- 下载SQLite3二进制文件：可以从SQLite网站的下载页面（[SQLite Download Page](https://www.sqlite.org/download.html)）下载适用于相应系统的SQLite3二进制文件
-
-- 安装SQLite3二进制文件：
-
-  - 对于Windows，只需运行安装程序并按照提示进行即可
-
-  - 对于macOS，您需要将二进制文件移动到/usr/local/bin目录中
-
-    ```bash
-    brew install sqlite
-    ```
-
-   - 对于Linux，您需要使用包管理器来安装SQLite3软件包
-
-     ```shell
-     sudo apt-get update
-     sudo apt-get install sqlite3
-     ```
-
-- 验证SQLite3是否已正确安装：
-  - 在命令行终端上输入sqlite3命令并回车
-  - 如果成功安装，则会进入SQLite3的命令行客户端
-- 可选地，安装SQLite3 GUI工具：如果您需要一个GUI工具来管理SQLite3数据库，则可以使用一些第三方工具
-  - SQLiteStudio
-  - DBeaver
-  - 这些工具可免费下载和使用
-
-注意：安装sqlite3和安装sqlite3依赖库不是一个概念，安装sqlite3依赖库，需要执行`sudo apt-get install libsqlite3-dev`
-
-# 4.以“.”开头的命令
-
-| 命令                                | 说明                                           |
-| ----------------------------------- | ---------------------------------------------- |
-| .archive ...                        | 管理SQL归档文件                                |
-| .auth ON&#124;OFF                   | 显示授权回调函数                               |
-| .backup ?DB? FILE                   | 将数据库DB（默认为“main”）备份到FILE           |
-| .bail on&#124;off                   | 在错误发生后停止。默认为OFF                    |
-| .binary on&#124;off                 | 打开或关闭二进制输出。默认为OFF                |
-| .cd DIRECTORY                       | 将工作目录更改为DIRECTORY                      |
-| .changes on&#124;off                | 显示SQL更改的行数                              |
-| .check GLOB                         | 如果自从.testcase以来的输出不匹配，则失败      |
-| .clone NEWDB                        | 从现有数据库克隆数据到NEWDB中                  |
-| .databases                          | 列出附加数据库的名称和文件                     |
-| .dbconfig ?op? ?val?                | 列出或更改sqlite3_db_config()选项              |
-| .dbinfo ?DB?                        | 显示有关数据库的状态信息                       |
-| .dump ?TABLE? ...                   | 将所有数据库内容呈现为SQL                      |
-| .echo on&#124;off                   | 打开或关闭命令回显                             |
-| .eqp on&#124;off&#124;full&#124;... | 启用或禁用自动EXPLAIN QUERY PLAN               |
-| .excel                              | 在电子表格中显示下一个命令的输出               |
-| .exit ?CODE?                        | 以返回代码CODE退出此程序                       |
-| .expert                             | 实验性功能。为查询建议索引                     |
-| .explain ?on&#124;off&#124;auto?    | 更改EXPLAIN格式模式。默认值：auto              |
-| .filectrl CMD ...                   | 运行各种sqlite3_file_control()操作             |
-| .fullschema ?--indent?              | 显示模式和sqlite_stat表的内容                  |
-| .headers on&#124;off                | 打开或关闭标题的显示                           |
-| .help ?-all? ?PATTERN?              | 显示有关PATTERN的帮助文本                      |
-| .import FILE TABLE                  | 将数据从FILE导入TABLE                          |
-| .imposter INDEX TABLE               | 在索引INDEX上创建仿冒表TABLE                   |
-| .indexes ?TABLE?                    | 显示索引的名称                                 |
-| .limit ?LIMIT? ?VAL?                | 显示或更改SQLITE_LIMIT的值                     |
-| .lint OPTIONS                       | 报告潜在的模式问题。                           |
-| .load FILE ?ENTRY?                  | 加载扩展库                                     |
-| .log FILE&#124;off                  | 打开或关闭日志记录。文件可以是stderr/stdout    |
-| .mode colum                         | 列对齐模式                                     |
-| .nullvalue STRING                   | 在NULL值的位置使用字符串STRING                 |
-| .once (-e&#124;-x&#124;FILE)        | 仅将下一个SQL命令的输出发送到FILE              |
-| .open ?OPTIONS? ?FILE?              | 关闭现有数据库并重新打开FILE                   |
-| .output ?FILE?                      | 将输出发送到FILE，如果省略FILE，则发送到stdout |
-| .parameter CMD ...                  | 管理SQL参数绑定                                |
-| .print STRING...                    | 打印文本字符串STRING                           |
-| .progress N                         | 在每个N操作码后调用进度处理程序                |
-| .prompt MAIN CONTINUE               | 替换标准提示符                                 |
-| .quit                               | 退出此程序                                     |
-| .read FILE                          | 从FILE读取输入                                 |
-| .recover                            | 尝试从损坏的数据库中恢复尽可能多的数据。       |
-| .restore ?DB? FILE                  | 从FILE还原数据库DB（默认为“main”）的内容       |
-| .save FILE                          | 将内存中的数据库写入FILE                       |
-| .scanstats on&#124;off              | 打开或关闭sqlite3_stmt_scanstatus()指标        |
-| .schema ?PATTERN?                   | 显示与PATTERN匹配的CREATE语句                  |
-| .selftest ?OPTIONS?                 | 运行在SELFTEST表中定义的测试                   |
-| .separator COL ?ROW?                | 更改列和行分隔符                               |
-| .session ?NAME? CMD ...             | 创建或控制会话                                 |
-| .sha3sum ...                        | 计算数据库内容的SHA3哈希值                     |
-| .shell CMD ARGS...                  | 在系统Shell中运行CMD ARGS...                   |
-| .show                               | 显示各种设置的当前值                           |
-| .stats ?on&#124;off?                | 显示统计信息或打开/关闭统计信息                |
-| .system CMD ARGS...                 | 在系统Shell中运行CMD ARGS...                   |
-| .tables ?TABLE?                     | 列出LIKE模式为TABLE的表名                      |
-| .testcase NAME                      | 开始将输出重定向到“testcase-out.txt”           |
-| .testctrl CMD ...                   | 运行各种sqlite3_test_control()操作             |
-| .timeout MS                         | 尝试以MS毫秒为间隔打开已锁定表                 |
-| .timer on&#124;off                  | 打开或关闭SQL计时器                            |
-| .trace ?OPTIONS?                    | 在每个SQL语句执行时输出                        |
-| .vfsinfo ?AUX?                      | 有关顶级VFS的信息                              |
-| .vfslist                            | 列出所有可用的VFS                              |
-| .vfsname ?AUX?                      | 打印VFS堆栈的名称                              |
-| .width NUM1 NUM2 ...                | 设置“ column”模式的列宽度                      |
-|                                     |                                                |
-
-# 5.SQL语句
-
-以下是SQLite 3中常用的SQL语句：
-
-1. 创建表格
-
-```sql
-CREATE TABLE table_name (
-  column_1 data_type constraints,
-  column_2 data_type constraints,
-  ...,
-  column_n data_type constraints
-);
-```
-
-2. 删除表格
-
-```sql
-DROP TABLE table_name;
-```
-
-3. 查询数据
-
-```sql
-SELECT column_1, column_2, ..., column_n 
-FROM table_name;
-```
-
-3. 插入数据
-
-```sql
-INSERT INTO table_name (column_1, column_2, ..., column_n)
-VALUES (value_1, value_2, ..., value_n);
-```
-
-4. 更新数据
-
-```sql
-UPDATE table_name
-SET column_1 = value_1, column_2 = value_2, ..., column_n = value_n
-WHERE condition;
-```
-
-5. 删除数据
-
-```sql
-DELETE FROM table_name WHERE condition;
-```
-
-# 6.示例
-
-以下是使用SQLite 3创建一个名为“students”的学生信息表并插入三个学生信息的示例：
-
-1.  打开`shell`命令行终端。 
-2.  连接到您的SQLite数据库文件。 
-
-```
-$ sqlite3 mydatabase.db
-```
-
-备注：`$`表示在shell命令行的命令行提示符
-出现如下界面表示sqlite3打开成功，版本不同显示信息会略有差异
-
-```
-QLite version 3.31.1 2020-01-27 19:55:54
-Enter ".help" for usage hints.
-sqlite> 
-```
-
-3. 创建一个名为“students”的学生信息表。该表将包含以下列：ID，姓名，年龄，性别和成绩。
-
-```
-sqlite> CREATE TABLE students (
-   ...> ID INTERGER PRIMARY KEY NOT NULL,
-   ...> name TEXT NOT NULL,
-   ...> age INTEGER NOT NULL,
-   ...> gender TEXT NOT NULL,
-   ...> score REAL NOT NULL);
-```
-
-备注：`sqlite>`和`   ...>`是sqlite3的命令行提示符
-此时，可以输入`.table`命令检查表student是否创建成功，如下所示：
-
-```
-sqlite> .table
-students
-```
-
-如果没有创建成功，或者表被删除，将会什么也不显示，例如此时执行DROP语句，将看不到表了
-
-```
-sqlite> DROP TABLE students;
-sqlite> .table
-sqlite>
-```
-
-重复上面的`CREATE TABLE`（为了放便大家复制，粘贴后面把`sqlite3>`, `   ...>`都省略了）
-
-```
-CREATE TABLE students (
-ID INTERGER PRIMARY KEY NOT NULL,
-name TEXT NOT NULL,
-age INTEGER NOT NULL,
-gender TEXT NOT NULL,
-score REAL NOT NULL);
-```
-
-4. 插入三个学生信息。例如：
-
-```
-INSERT INTO students (ID, name, age, gender, score)
-   ...> values(1,'张三', 18, '男', 90.0);
-INSERT INTO students (ID, name, age, gender, score)
-values(2,'子涵', 18, '女', 88.5);
-INSERT INTO students (ID, name, age, gender, score)
-values(3, '张伟', 19, '男', 82.5);
-```
-
-这将向学生信息表中添加三条记录。每条记录都包含姓名、年龄、性别和分数等列的值。由于我们使用了自增长的主键列ID，因此每个记录都将在插入时自动被赋予一个唯一的ID值。
-
-5. 确认学生信息已成功插入。可以使用`SELECT`语句来检索学生信息表中的所有行。例如：
-
-```
-select * FROM students;
-1|张三|18|男|90.0
-2|子涵|18|女|88.5
-3|张伟|19|男|82.5
-```
-
-如果嫌弃这种界面，可以执行.headers on和.mode column，再执行SELECT语句，就好看了，如下图：
-
-```sql
-sqlite> .headers on
-sqlite> .mode column
-sqlite> select * FROM students;
-ID          name        age         gender      score     
-----------  ----------  ----------  ----------  ----------
-1           张三          18          男           90.0      
-2           子涵          18          女           88.5      
-3           张伟          19          男           82.5  
-```
-
-6. 退出SQLite shell或关闭终端会话。
-
-```
-sqlite> .exit
-```
-
-# 7.sqlite3编程
-
-## 7.1.打开与关闭
-
-### 7.1.1.数据库的打开
-
-```c
-/*打开一个SQLite数据库文件*/
-int sqlite3_open(
-    const char *filename,   /*数据库文件的文件名，如果为 ":memory:" 则表示创建内存中数据库*/
-    sqlite3 **ppDb          /*返回指向数据库连接句柄的指针*/
-);
-```
-
-这个函数使用指定的数据库文件名（或 `:memory:`）打开一个新的数据库连接，并且把连接句柄返回给调用者如果连接成功，将会返回 `SQLITE_OK` 编码（0），否则将会返回其他错误代码
-需要注意的是，SQLite 数据库文件不存在时将会自动创建。如果 `filename` 参数为 `NULL` ，该函数返回 `SQLITE_MISUSE` （错用 SQLite 调用）错误。`ppDb` 参数是一个二级指针，它将存储一个指向打开的数据库连接的指针，该指针需要在后续的 SQLite 操作中使用
-例如，以下是在 C 语言中打开一个 SQLite 数据库的示例代码：
-
-```c
-#include <stdio.h>
-#include <sqlite3.h>
-
-int main() {
-    sqlite3 *db;
-	/*打开数据库*/
-	int rc = sqlite3_open("test.db", &db);
-	if (rc == SQLITE_OK) {
-		printf("已成功打开数据库\n");
-		sqlite3_close(db); // 关闭数据库连接
-	} else {
-		fprintf(stderr, "无法打开数据库: %s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		return 1;
-	}
-	return 0;
-}
-```
-
-在此示例中，打开名为 "test.db" 的 SQLite 数据库连接，并检查是否成功。如果连接成功，则输出 `"已成功打开数据库" `消息，然后关闭连接，否则将会输出错误信息。
-
-### 7.1.2.数据库的关闭
-
-```c
-/*关闭指定数据库连接*/
-int sqlite3_close(sqlite3*);
-```
-
-该函数接收一个被打开的数据库连接指针，如果成功关闭返回 `SQLITE_OK` 编码（0），否则返回其他错误代码。
-在使用完SQLite数据库连接之后，应该释放它以避免资源泄漏和内存占用。调用 `sqlite3_close()` 函数将关闭数据库连接，并释放所有相关的资源，包括已编译的语句等。如果在关闭连接之前还有未完成的事务，则会自动回滚这些事务
-例如，以下是在 C 语言中关闭 SQLite 数据库连接的示例代码：
-
-```c
-#include <sqlite3.h>
-
-int main() {
-    sqlite3 *db;
-    int rc = sqlite3_open("test.db", &db);
-    // 执行一些数据库操作
-    // ...
-
-    rc = sqlite3_close(db);
-    if (rc == SQLITE_OK) {
-      printf("Closed database successfully\n");
-  } else {
-      fprintf(stderr, "Can't close database: %s\n", sqlite3_errmsg(db));
-  }
-
-    return 0;
-}
-```
-
-在此示例中，在执行所需的 SQLite 操作之后，使用 `sqlite3_close()` 函数关闭数据库连接。如果没有出现错误，则输出 "Closed database successfully" 消息，否则将会输出错误信息
-
-## 7.2.sqlite3_exec函数介绍
-
-`sqlite3_exec()` 函数用于在 SQLite 数据库连接上执行一条或多条 SQL 语句，并调用一个回调函数处理执行结果。该函数的原型如下：
-
-```c
-int sqlite3_exec(
-    sqlite3* db,                               /* 执行 SQL 命令的数据库连接 */
-    const char *sql,                           /* 待执行的 SQL 命令 */
-    int (*callback)(void*,int,char**,char**),  /* 在执行命令时的回调函数 */
-    void *,                                    /* 作为第一个参数传递给回调函数的指针 */
-    char **errmsg                              /* 用于存储错误消息的指针 */
-);
-```
-
-该函数接收一个打开的数据库连接 `sqlite3*`，待执行的 SQL 命令 `sql`，以及一个回调函数 `callback`，可以选择性地传递一个指向用户数据的指针作为回调函数的第一个参数，该句话的意思是，回调函数的参数列表（签名）决定了该函数在被调用时应接收哪些参数，并指定了它们的数据类型和顺序。
-回调函数必须符合以下格式：
-
-```c
-int (*callback)(void*, int, char**, char**);
-```
-
-- 第一个参数 `void*`，是使用者传递给 `sqlite3_exec()` 调用的 `void*` 参数。
-- 第二个参数 `int`，是查询结果所返回的列数。
-- 第三个参数 `char**`，是包含每个结果集元素值的字符串数组。一个字符数组代表一行，数组每个元素代表一个字符串，该字符串内容为该行每一列的值。
-- 第四个参数 `char**`，是包含每个结果集元素的列名称的字符串数组。这通常会在 SELECT 语句中返回。
-
-回调函数的返回值应为整数，并且通常全部返回0表示执行成功。如果需要提前终止查询或在回调函数过程中发现错误，可以返回非零值
-`errmsg` 是用于保存 `sqlite3_exec()` 返回的错误消息的指针。
-当函数成功执行 SQL 命令时，将会返回 `SQLITE_OK` 编码（0），否则将会返回其他错误代码。如果在执行命令时发生错误，则 `errmsg` 将被设置为一个非空值，其中包含有关错误的详细信息。如果 `errmsg` 未被设置，则表示该函数执行成功。
-
-## 7.3.sqlite3_exec()函数应用
-
-### 7.3.1.使用sqlite3_exec()函数创建表
-
-以下是一个使用 `sqlite3_exec()` 函数执行 SQL 命令的示例代码：
-
-```c
-#include <sqlite3.h>
-#include <stdio.h>
-
-int main(int argc, char* argv[]) {
-	sqlite3 *db;
-	char *zErrMsg = 0;
-	int rc;
-	/*打开数据库*/
-	rc = sqlite3_open("test.db", &db);
-	if (rc) {
-		fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		return 1;
-	} else {
-		fprintf(stdout, "Opened database successfully\n");
-	}
-
-	/*创建表的SQL语句*/
-	char *sql = "CREATE TABLE IF NOT EXISTS COMPANY(" //表已经存在则打开表，表不存在则创建。
-		"ID INT PRIMARY KEY     NOT NULL,"
-		"NAME           TEXT    NOT NULL,"
-		"AGE            INT     NOT NULL);";
-
-	/*执行SQL语句*/
-	rc = sqlite3_exec(db, sql, 0, 0, &zErrMsg);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "SQL error: %s\n", zErrMsg);
-		sqlite3_free(zErrMsg);
-	} else {
-		printf("Table created successfully\n");
-	}
-
-	/*关闭数据库文件*/
-	sqlite3_close(db);
-	return 0;
-}
-```
-
-上述代码中，首先调用sqlite3_open()函数打开一个名为"test.db"的数据库连接，然后使用**CREATE TABLE语句**创建一张名为"COMPANY"的表格。该表格包含三列，分别是"id"、"name"和"age"**,**
-		其中，id列被定义为主键（PRIMARY KEY），且不能为NULL。
-		接下来，通过调用sqlite3_exec()函数执行SQL语句，
-		将该语句传递给SQLite引擎进行解析和执行。
-		如果执行成功，则输出"Table created successfully"，
-		否则输出具体的错误消息。
-
-### 7.3.2.使用sqlite3_exec()函数向表中插入数据
-
-创建好表格以后我们就可以向其添加数据了：
-
-```c
-#include <sqlite3.h>
-#include <stdio.h>
-
-int main(int argc, char* argv[]) {
-    sqlite3 *db;
-    char *zErrMsg = 0;
-    int rc;
-
-	/*打开数据库*/
-    rc = sqlite3_open("test.db", &db);
-    if (rc) {
-        fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-        sqlite3_close(db);
-        return 1;
-    } else {
-        fprintf(stdout, "Opened database successfully\n");
-    }
-
-	/*创建表的SQL语句*/
-    char *sql = "INSERT INTO COMPANY (ID,NAME,AGE) VALUES (1, '张三', 32);"
-        "INSERT INTO COMPANY (ID,NAME,AGE) VALUES (2, '李四', 33);"
-    	"INSERT INTO COMPANY (ID,NAME,AGE) VALUES (3, '王五', 30);"
-    	"INSERT INTO COMPANY (ID,NAME,AGE) VALUES (4, '王博', 32);"
-        "INSERT INTO COMPANY (ID,NAME,AGE) VALUES (5, '李为', 33);"
-    	"INSERT INTO COMPANY (ID,NAME,AGE) VALUES (6, '赵倩', 30);";
-    
-    //类似于sprintf
-    char sno[STRLEN],sname[STRLEN],sex[STRLEN],age[STRLEN],sdept[STRLEN];
-    sql = sqlite3_mprintf("INSERT INTO student" 
-						"(Sno,Sname,Sex,Age,Sdept) VALUES ('%s','%s','%s','%s','%s');",sno,sname,sex,age,sdept);
-
-
-	/*执行SQL语句*/
-    rc = sqlite3_exec(db, sql, 0, 0, &zErrMsg);
-    if (rc != SQLITE_OK) {
-        fprintf(stderr, "SQL error: %s\n", zErrMsg);
-        sqlite3_free(zErrMsg);
-    } else {
-        fprintf(stdout, "Records created successfully\n");
-    }
-
-	/*关闭数据库文件*/
-    sqlite3_close(db);
-    return 0;
-}
-```
-
-在上述代码中，需要先调用sqlite3_open()函数打开数据库连接。然后，使用INSERT INTO语句将一条记录插入到"COMPANY"表格中。该记录包含三个字段，分别是"id"、"name"和"age"，对应的值分别为1、'张三'和32。最后，通过sqlite3_exec()函数执行SQL语句，并根据返回值判断操作是否成功。
-
-### 7.3.3.使用sqlite3_exec()函数查询数据
-
-```c
-#include <sqlite3.h>
-#include <stdio.h>
-
-// 回调函数
-int callback(void *data, int argc, char **argv, char **azColName) {
-    int i;
-    printf("callback:\n");
-    for(i = 0; i < argc; i++) {
-       printf("%s = %s\n", azColName[i], argv[i] ? argv[i] : "NULL");
-   }
-    printf("\n");
-
-    return 0;
-}
-
-int main () {
-    sqlite3 *db;
-    char *zErrMsg = 0; // 存储错误消息的指针
-    int rc;
-
-    rc = sqlite3_open("test.db", &db);
-    if (rc != SQLITE_OK) {
-       fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-       sqlite3_close(db);
-       return 1;
-   }
-
-    const char* sql = "SELECT * from COMPANY";
-    rc = sqlite3_exec(db, sql, callback, NULL, &zErrMsg);//callback表单有几行就会被调用几次
-
-    if (rc != SQLITE_OK) {
-       fprintf(stderr, "SQL error: %s\n", zErrMsg);
-       sqlite3_free(zErrMsg);
-   } else {
-       printf("Operation done successfully\n");
-   }
-
-    sqlite3_close(db);
-    return rc;
-}
-```
-
-在此示例中，我们定义了一个回调函数 `callback()`，该函数用于处理 `sqlite3_exec()` 执行结果。接下来，我们打开一个名为 "test.db" 的 SQLite 数据库连接，并执行 SELECT 命令。最后，我们通过检查 `rc` 和 `zErrMsg` 的返回值，判断查询是否成功并处理执行结果。
-
-## 7.4.void *data的作用是什么？
-
-void *data是sqlite3_exec()函数的第四个参数，它是一个用户定义的指针类型，提供了一个通用的方法来传递额外的数据给回调函数。sqlite3_exec()函数的高级用法
-示例代码：
-
-```c
-#include <sqlite3.h>
-#include <stdio.h>
-
-// 回调函数
-int callback(void *data, int argc, char **argv, char **azColName) {
-	int i;
-	if(argv[0][0] == '1')
-		printf("%s\n", (char *)data);
-	for(i = 0; i < argc; i++) {
-		printf("%s\t", argv[i] ? argv[i] : "NULL");
-	}
-	printf("\n");
-
-	return 0;
-}
-
-int main () {
-	sqlite3 *db;
-	char *zErrMsg = 0; // 存储错误消息的指针
-	int rc;
-
-	rc = sqlite3_open("test.db", &db);
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "Can't open database: %s\n", sqlite3_errmsg(db));
-		sqlite3_close(db);
-		return 1;
-	}
-
-	char *str = "ID\t名字\t年龄";
-	char *sql = "SELECT * from COMPANY";
-	rc = sqlite3_exec(db, sql, callback, str, &zErrMsg);
-
-	if (rc != SQLITE_OK) {
-		fprintf(stderr, "SQL error: %s\n", zErrMsg);
-		sqlite3_free(zErrMsg);
-	} else {
-		printf("Operation done successfully\n");
-	}
-
-	sqlite3_close(db);
-	return rc;
-}
-```
-
-#
