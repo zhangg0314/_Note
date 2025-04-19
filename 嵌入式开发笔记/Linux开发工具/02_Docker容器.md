@@ -76,20 +76,18 @@ Docker 使用客户端-服务器 (C/S) 架构模式。Docker 客户端会与 Doc
 
 # Docker安装
 
-## 1.卸载旧版本
+## 卸载旧版本
 
-在安装 Docker Engine 之前，需要卸载任何冲突的软件包。正在在使用的Linux 发行版可能提供非官方的 Docker 软件包，当使用 Docker 提供的官方软件包时这可能会发生冲突。因此必须在安装 Docker Engine 正式版之前卸载这些软件包 。
+在安装 Docker Engine 之前，需要卸载任何冲突的软件包。所使用的Linux 发行版可能提供非官方的 Docker 软件包，当使用 Docker 提供的官方软件包时这可能会发生冲突。因此必须在安装 Docker Engine 正式版之前卸载这些软件包 。
 
-要卸载的非官方软件包是：
-
-- `docker.io`
-- `docker-compose`
-- `docker-compose-v2`
-- `docker-doc`
-- `podman-docker`
-
-此外，Docker Engine 是由自己和它所依赖的依赖项捆绑成的一个捆绑包：如果之前已安装,那么卸载它们以避免 与 Docker Engine 捆绑的版本冲突。
-`containerd``runc``containerd.io``containerd``runc`
+> [!NOTE]
+> 要卸载的非官方软件包是：
+>
+> - `docker.io`
+> - `docker-compose`
+> - `docker-compose-v2`
+> - `docker-doc`
+> - `podman-docker`
 
 执行以下命令卸载所有冲突的软件包。
 
@@ -102,7 +100,7 @@ for pkg in docker.io docker-doc docker-compose docker-compose-v2 podman-docker c
 
 存储在其中的映像、容器、卷和网络不会在卸载 Docker 时自动删除。如果想安装全新的版本，并希望清理任何现有数据，删除`/var/lib/docker/`
 
-## 2.Docer的安装
+## 安装Docker
 
 [Docker CE 镜像源站-阿里云开发者社区 (aliyun.com)](https://developer.aliyun.com/article/110806)
 
