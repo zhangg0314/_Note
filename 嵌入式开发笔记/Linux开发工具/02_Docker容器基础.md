@@ -221,7 +221,7 @@ docker search 镜像名
 ### 打标签
 
 ```bash
- docker tag SOURCE_IMAGE[:TAG] TARGET_IMAGE[:TAG]
+docker tag SOURCE_IMAGE[:TAG] TARGET_IMAGE[:TAG]
 #Create a tag TARGET_IMAGE that refers to SOURCE_IMAGE，是又创建了一个镜像，不是替换原来的镜像
 
 ```
@@ -720,7 +720,7 @@ Docker容器：容器就是基于镜像运行起来提供服务的。
 
 ## 2.Dockerile语法
 
-### 基础知识
+### 1.基础知识
 
 1. 每个保留关键字（指令）都必须是大写字母
 
@@ -732,7 +732,7 @@ Docker容器：容器就是基于镜像运行起来提供服务的。
 
    ![image-20250413132433613](..\figure\image-20250413132433613.png)
 
-### DockerFile指令
+### 2.DockerFile指令
 
 ```dockerfile
 FROM 				#基础镜像，一切从这里开始构建
@@ -757,28 +757,26 @@ ENV					#构建的时候设置环境变量
    gurux-dlms==1.0.178
    gurux-net==1.0.19
    gurux-serial==1.0.20
-   Python==3.9.22
+   #Python==3.9.22
    ```
    
 2. 编写DockerFile文件,官方默认文件名`Dockerfile`(无需指定文件)
 
    ```dockerfile
-   FROM python:slim 
+   # 使用 Python slim 作为基础镜像
+   FROM python:3.9-slim
+   # 设置工作目录
+   WORKDIR /app/DLMS_test
    
-   MAINTAINER	zhangg<z3254406361@163.com>
+   COPY requirements.txt /app/DLMS_test/
+   # 设置环境变量
+   ENV LANG=C.UTF-8
+   # 安装 Python 依赖
+   RUN pip install --no-cache-dir -r /app/DLMS_test/requirements.txt
    
-   WORKDIR /
-   
-   COPY README.md /app/dlms_test
-   ADD dlms_pyhon_test.tar.gz /app/dlms_test #会自动解压
-   
-   RUN apt-get install
-   
-   ENV PATH=XXX:$PATH
-   
-   CMD /bin/bash && cd /app
+   CMD /bin/bash
    ```
-
+   
 3. **执行构建命令**
 
    ```bash
@@ -787,6 +785,8 @@ ENV					#构建的时候设置环境变量
    # options
    	-f,--file string #Name of the Dockerfile (default: "PATH/Dockerfile")
    	-t, --tag stringArray               Name and optionally a tag (format: "name:tag")
+   	
+   docker build . -t dlmstest:`date +"%Y%m%d"`
    ```
 
 4. **显示镜像历史构建过程**
@@ -811,7 +811,9 @@ docker run 镜像 -l#运行容器时带的参数
 #而CMD会之间把ls -a替换成-l，而-l命令Linux没有会报错
 ```
 
-# 发布镜像到服务器
+------
+
+# 发布镜像
 
 1. 在服务器注册账号并登录
 
@@ -840,15 +842,86 @@ docker run 镜像 -l#运行容器时带的参数
 
 # Docker网络
 
-## 1.理解docker0
+## 1.docker0网桥设备
 
-## 2.--link（单向的）
+### 介绍
 
-通过服务名来ping，比如容器A --link 容器B的本质就是在A的`/etc/host`配置中增加了一个容器B的ip 和容器B的名字，因此可以直接通过服务名来ping。
+docker0 是一个虚拟以太网桥（Ethernet Bridge）是一个桥接设备，它在宿主机上创建一个虚拟网络接口，用于连接容器网络。它是Docker默认的网络桥接模式的核心组件。
 
-但由于官方的docker0网卡有许多问题比如现在这个不能ping服务名。因此现在使用的最多的是自定义的网卡而不用dokcer0
+### 作用
 
-## 3.自定义网络
+- 网络桥接： docker0   作为一个虚拟桥接设备，连接容器的虚拟网卡和宿主机的网络接口。
+- IP地址分配：  docker0   通常会分配一个子网（如   172.17.0.0/16  ），并为每个容器分配一个子网内的IP地址。
+- 网络隔离：通过桥接，容器之间的网络通信被隔离在   docker0   子网内，不会直接暴露到宿主机的物理网络。
+
+### 相关命令
+
+```bash
+#查看docker0网卡
+[zhangg@bncs-server1]:~/Docker$ ip addr show docker0
+
+3: docker0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default 
+    link/ether 02:42:1e:e6:81:31 brd ff:ff:ff:ff:ff:ff
+    inet 172.17.0.1/16 scope global docker0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::42:1eff:fee6:8131/64 scope link 
+       valid_lft forever preferred_lft forever
+```
+
+## 2.veth虚拟网卡对
+
+### 介绍
+
+- 虚拟网卡对（  veth  ）是一种虚拟网络设备，用于在宿主机和容器之间建立网络连接。每个   veth   对包含两个端点，分别连接到不同的网络接口。
+
+- 当启动一个Docker容器时，Docker会创建一个   veth   对，并将其中一个端点（如   vethXXXX  ）连接到   docker0   桥接设备。
+
+  容器内部的网络接口（如   eth0  ）通过   veth   对的另一个端点连接到宿主机
+### 作用
+
+-  **数据转发**
+  数据包从容器发送到宿主机时，会经过   veth   对，然后通过   docker0   转发到目标地址。
+
+- **连接容器和宿主机**
+  veth   对的一个端点连接到容器内部的虚拟网络接口，另一个端点连接到宿主机的   docker0   桥接设备。• 数据转发：容器的网络流量通过   veth   对发送到宿主机，然后通过   docker0   转发到目标地址。
+
+### 相关命令
+
+```bash
+#查看虚拟网卡对
+ip link show
+```
+
+## 3.--link（单向的）
+
+由于官方的docker0网卡有许多问题比如现在这个不能ping服务名。因此现在使用的最多的是自定义的网卡而不用dokcer0。
+
+但想要通过服务名来ping，可以使用--link选项，比如容器A --link 容器B的本质就是在A的`/etc/host`配置中增加了一个容器B的ip 和容器B的名字，因此可以直接通过服务名来ping。
+
+注意--link是单向的，A --link B代表A能通过服务吗pingB，但反过来不行。
+
+```bash
+#该选项允许将一个容器连接到另一个容器，并为连接的容器设置一个别名。这样，连接的容器可以通过别名在内部网络中访问目标容器的网络接口。
+
+
+# 启动数据库容器
+docker run -d --name db mysql
+
+#启动Web应用容器并使用   --link   连接到数据库容器
+docker run -d --name web --link db:database my-web-app
+```
+
+
+
+## 3.容器或主机间ping（仅使用ip地址）
+
+- 容器之间通过IP地址可以相互ping通，因为它们同属于一个网段下，且网关是docker0的ip
+- 容器与宿主机之间通过IP地址可以相互ping通，因为它们同属于一个网段下，且网关是docker0的ip
+- 网关是宿主机的docker0的ip，因此当宿主机能ping通外网时，容器可以通过IP地址ping通外网。
+- 网关是宿主机的docker0的ip，宿主机能对外隐藏容器ip，因此外网不能通过ip地址ping通容器
+- 网外可以通过`宿主机ip+容器映射端口号`访问容器服务。
+
+## 4.自定义网络
 
 #### 查看所有的docker网络
 
@@ -909,14 +982,6 @@ PING busybox1 (172.19.0.2): 56 data bytes
 ```
 
 这样，`busybox1` 容器和 `busybox2` 容器建立了互联关系。
-
-# Docker可视化
-
-## 1.Portainer
-
-Portainer是Docker的图形化界面管理工具！提供一个后台面板给我们操作！
-
-## 2.Rancher（CI/CD）
 
 # 参考链接
 
