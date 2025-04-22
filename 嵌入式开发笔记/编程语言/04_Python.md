@@ -202,3 +202,34 @@ import random
 a = ndom.randint(0,2)#从0~2随机取一个整数，包含2
 ```
 
+# 字符串
+
+## 字符串编码
+
+本质上就是二进制数据与语言文字的一一对应关系
+
+![image-20250416214522059](..\figure\image-20250416214522059.png)
+
+```python
+#编码
+a = "hell0"
+a = a.encode()
+print(a)
+a = a.decode()
+print(a)
+```
+
+# 深浅拷贝
+
+## 浅拷贝
+
+```python
+a = 5
+b = a
+print(a)
+print(b)
+a = 3
+print(a)
+print(b)
+```
+
