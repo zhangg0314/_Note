@@ -429,9 +429,9 @@ off_t lseek(int fd,off_t offset,int whence)
 | O_TRUNC  | 文件存在时，打开文件则清空原有内容                |
 | O_APPEND | 以追加方式打开文件                                |
 
-## 4.3.文件属性获取
+# 文件属性获取
 
-### 4.3.1.修改文件访问权限
+## 修改文件访问权限
 
 ```c
 #include <sys/stat.h>
@@ -442,7 +442,30 @@ int fchmode(int fd,mode_t mode);
 //文件权限实际值 = mode - umask
 ```
 
-### 4.3.2.获取文件属性
+## 获取单个文件属性
+
+### 基本概念
+
+stat函数用于获取文件的详细信息。它返回的是文件本身的属性，例如文件大小、文件类型（是普通文件、目录、符号链接等）、文件的权限（所有者、所属组和其他用户的读、写、执行权限）、文件的访问时间、修改时间和状态改变时间等。这些信息被存储在一个`struct stat`类型的结构体中。
+
+### stat结构体
+
+```c
+struct stat {
+     dev_t     st_dev;         /* ID of device containing file */
+     ino_t     st_ino;         /* Inode number */
+     mode_t    st_mode;        /* File type and mode */
+     nlink_t   st_nlink;       /* Number of hard links */
+     uid_t     st_uid;         /* User ID of owner */
+     gid_t     st_gid;         /* Group ID of owner */
+     dev_t     st_rdev;        /* Device ID (if special file) */
+     off_t     st_size;        /* Total size, in bytes */
+     blksize_t st_blksize;     /* Block size for filesystem I/O */
+     blkcnt_t  st_blocks;      /* Number of 512B blocks allocated */
+};
+```
+
+### 系统调用接口
 
 ```c
 int stat(const char* path,struct stat* buf)
@@ -462,21 +485,32 @@ int lstat(const char* path,struct stat* buf)
     S_ISFIFO()
 ```
 
-### 4.3.3.STAT结构体
+## 获取文件系统属性
+
+### 基本概念
+
+statfs函数主要用于获取文件系统的相关信息，而不是单个文件的信息。它返回的内容包括文件系统的块大小、总块数、可用块数、文件系统类型等。这些信息被存储在一个`struct statfs`类型的结构体中，他们对于了解磁盘空间使用情况、文件系统的特性等非常有用。
+
+### statfs结构体
 
 ```c
-struct stat {
-     dev_t     st_dev;         /* ID of device containing file */
-     ino_t     st_ino;         /* Inode number */
-     mode_t    st_mode;        /* File type and mode */
-     nlink_t   st_nlink;       /* Number of hard links */
-      uid_t     st_uid;         /* User ID of owner */
-      gid_t     st_gid;         /* Group ID of owner */
-      dev_t     st_rdev;        /* Device ID (if special file) */
-      off_t     st_size;        /* Total size, in bytes */
-       blksize_t st_blksize;     /* Block size for filesystem I/O */
-       blkcnt_t  st_blocks;      /* Number of 512B blocks allocated */
-
+struct statfs {
+	long f_type; /* 文件系统类型 */
+	long f_bsize; /* 经过优化的传输块大小 */
+	long f_blocks; /* 文件系统数据块总数 */
+	long f_bfree; /* 可用块数 */
+	long f_bavail; /* 非超级用户可获取的块数 */
+	long f_files; /* 文件结点总数 */
+	long f_ffree; /* 可用文件结点数 */
+	fsid_t f_fsid; /* 文件系统标识 */
+	long f_namelen;/* 文件名的最大长度 */
+};
 ```
 
-# 
+### 系统调用接口
+
+``` c
+int statfs(const char *path, struct statfs *buf)
+//其中path是文件系统中的一个路径（这个路径用于确定文件系统，通常可以是挂载点路径或者文件系统内的任意有效路径），buf是一个struct statfs类型的结构体指针，用于存储获取到的文件系统信息。
+```
+
