@@ -78,3 +78,9 @@ int open_fd(u_int32_t baud);//开启dlt698_42线程的下行抄表串口，上�
 =======
 
 ### 2.载波
+
+
+
+
+
+![d078fcdb1bbcf96ca208967f866ada67](C:\Users\Administrator\AppData\Roaming\DingTalk\189944342_v2\resource_cache\d0\d078fcdb1bbcf96ca208967f866ada67.png)
