@@ -181,30 +181,41 @@ XML 作为一种标记语言，其优势在于**格式自描述、跨平台兼�
 
 # ——XML文件解析——
 
-# 1.tinyxml
+# 1.创建XML文件
 
 tinyxml使用的是DOM解析方式，优点是解析速度快，缺点是无法解析复杂的xml文件。
 
-## 1.创建
-
-创建一个xml文件，并为其插入头部信息和根、子节点
-
-### 1.创建一个XML类
+## 1.创建一个XML类
 
 ```c++
-TiXmlDocument* tinyXmlDoc = new TiXmlDocument();
+    // 创建一个XML类
+    TiXmlDocument *tinyXmlDoc = new TiXmlDocument();
+    if (tinyXmlDoc == nullptr)
+        printf("创建XML文件失败\n");
+    else
+        printf("创建XML文件成功\n");
 ```
 
-### 2.创建头部信息并插入到xml类中
+## 2.创建头部信息
 
 ```c++
-// xml的声明(三个属性：版本，编码格式，保留空串即可)
-TiXmlDeclaration* tinyXmlDeclare = new TiXmlDeclaration("1.0", "utf-8", "");	// 声明头部格式
-// 插入文档类中
-tinyXmlDoc->LinkEndChild(tinyXmlDeclare);
+    //创建头部信息
+    TiXmlDeclaration *declare = new TiXmlDeclaration("1.0", "utf-8", "");
+    // 插入文档类中
+    if(tinyXmlDoc->LinkEndChild(declare) == NULL)
+        printf("%s\n",tinyXmlDoc->ErrorDesc());
+    else
+        printf("插入声明成功\n");
 ```
 
-### 3.创建根节点
+```shell
+root@cqr40:~# ./app
+创建XML文件成功
+插入声明成功
+<?xml version="1.0" encoding="utf-8" ?>
+```
+
+## 3.创建根节点
 
 ```c++
 // 创建时需要指定根节点的名称
@@ -212,9 +223,14 @@ TiXmlElement* Library = new TiXmlElement("Library");
 tinyXmlDoc->LinkEndChild(Library);		// 把根节点插入到文档类中
 ```
 
-![image-20250611155416596](..\figure\image-20250611155416596.png)
+```bash
+创建XML文件成功
+插入声明成功
+<?xml version="1.0" encoding="utf-8" ?>
+<Library />
+```
 
-### 4.添加子节点
+## 4.添加子节点
 
 首先创建一个子节点，然后新建一个文本，将文本添加到子节点中，最后将字节点添加到根节点中。
 
@@ -225,213 +241,246 @@ Book->LinkEndChild(bookText);	// 给Book节点添加文本
 Library->LinkEndChild(Book);	// 插入到根节点下
 ```
 
-![image-20250611155527301](..\figure\image-20250611155527301.png)
+```shell
+创建XML文件成功
+插入声明成功
+<?xml version="1.0" encoding="utf-8" ?>
+<Library>
+    <Book>书本</Book>
+</Library>
+```
 
-### 5.添加带属性的子节点
+## 5.添加带属性的子节点
 
 使用setAttribute可以简单的给节点添加属性值；如果要创建子节点的子节点，就跟创建子节点一样，只是创建好后要添加到子节点中即可。
 
 ```c++
-TiXmlElement *Book1 = new TiXmlElement("Book1");
-// 插入属性
-Book1->SetAttribute("ID", 1);
-Book1->SetAttribute("Name", "水浒传");
-Book1->SetAttribute("Price", "64.6");
+    TiXmlElement *Book = new TiXmlElement("Book");
+    // 插入属性
+    Book->SetAttribute("ID", 1);
+    Book->SetAttribute("Name", "水浒传");
+    Book->SetAttribute("Price", "64.6");
 
-// 创建Book1的子节点Description
-TiXmlElement *Description = new TiXmlElement("Description");
-TiXmlText *descriptionText = new TiXmlText("108个拆迁户");		// 创建文本
-Description->LinkEndChild(descriptionText);		// 给Description节点添加文本
-Book1->LinkEndChild(Description);				// 插入到Book1节点下
-
-// 创建Book1的子节点Page
-TiXmlElement *Page = new TiXmlElement("Page");
-TiXmlText *pageText = new TiXmlText("100页");		// 创建文本
-Page->LinkEndChild(pageText);	// 给Page节点添加文本
-Book1->LinkEndChild(Page);		// 插入到Book1节点下
-
-Library->LinkEndChild(Book1);	// 插入到根节点下
+    TiXmlText *bookText = new TiXmlText("书本"); // 创建文本
+    Book->LinkEndChild(bookText);                // 给Book节点添加文本
+    node1->LinkEndChild(Book);                   // 插入到根节点下
 ```
 
-如图：![image-20250611155805362](..\figure\image-20250611155805362.png)
+```bash
+<Library>
+    <Book ID="1" Name="水浒传" Price="64.6">书本</Book>
+</Library>
+```
 
-### 6.将doc写入xml文件
+## 6.将doc写入xml文件
 
 只需使用文档类调用SaveFile方法即可，参数传文件名,写入成功返回true，写入失败返回false
 
 ```c++
-bool result = tinyXmlDoc->SaveFile(FILE_NAME);
+
+    // 如果只是想在控制台打印而已，那么可以直接调用函数tinyXmlDoc->Print();就可以实现在控制台上打印出来了！
+    // tinyXmlDoc->Print();
+    bool result = tinyXmlDoc->SaveFile("test.xml");
+    if (!result)
+        printf("%s\n", tinyXmlDoc->ErrorDesc());
+    else
+        printf("创建XML文件成功\n");
+    return 0;
 ```
 
-### 7.转换为字符串
+```bash
+root@cqr40:~# ./app
+创建XML文件成功
+插入声明成功
+创建XML文件成功
+root@cqr40:~# ls
+app  test.xml
+root@cqr40:~# 
+```
+
+## 7.转换为字符串
 
 ```c++
 TiXmlPrinter printer;
 tinyXmlDoc->Accept(&printer);
 printf("%s\n", printer.CStr());
+
+
 //如果只是想在控制台打印而已，那么可以直接调用函数tinyXmlDoc->Print();就可以实现在控制台上打印出来了！
+tinyXmlDoc->Print();
 ```
 
-### 8.创建xml文件并插入元素节点
+## 8.示例代码
 
 ```c++
-void create_XML() {
-	printf("\n----- create_XML -----\n"); 
+#include <stdio.h>
+#include <cstddef>
+#include "tinyxml.h"
+#include "tinystr.h"
+int main(int argc, char *argv[])
+{
+    // 创建一个XML类
+    TiXmlDocument *tinyXmlDoc = new TiXmlDocument();
+    if (tinyXmlDoc == NULL)
+        printf("创建XML文件失败\n");
+    else
+        printf("创建XML文件成功\n");
 
-	//新建一个xml文件
-	// 定义一个TiXmlDocument类指针
-	TiXmlDocument* tinyXmlDoc = new TiXmlDocument();
+    // 创建头部信息
+    TiXmlDeclaration *declare = new TiXmlDeclaration("1.0", "utf-8", "");
+    // 插入文档类中
+    if (tinyXmlDoc->LinkEndChild(declare) == NULL)
+        printf("%s\n", tinyXmlDoc->ErrorDesc());
+    else
+        printf("插入声明成功\n");
 
-	// xml的声明(三个属性：版本，编码格式，保留空串即可)
-	TiXmlDeclaration* tinyXmlDeclare = new TiXmlDeclaration("1.0", "utf-8", "");	// 声明头部格式
-	// 插入文档类中
-	tinyXmlDoc->LinkEndChild(tinyXmlDeclare);
+    // 创建根节点
+    //  创建时需要指定根节点的名称
+    TiXmlElement *node1 = new TiXmlElement("Library");
+    tinyXmlDoc->LinkEndChild(node1); // 把根节点插入到文档类中
 
-	// 根节点
-	TiXmlElement* Library = new TiXmlElement("Library");
-	tinyXmlDoc->LinkEndChild(Library);// 把根节点插入到文档类中
+    TiXmlElement *Book = new TiXmlElement("Book");
 
-	// 创建Book节点
-	TiXmlElement *Book = new TiXmlElement("Book");
-	TiXmlText *bookText = new TiXmlText("书本");	// 创建文本
-	Book->LinkEndChild(bookText);	// 给Book节点添加文本
-	Library->LinkEndChild(Book);	// 插入到根节点下
+    // 插入属性
+    Book->SetAttribute("ID", 1);
+    Book->SetAttribute("Name", "水浒传");
+    Book->SetAttribute("Price", "64.6");
 
-	// 创建Book1节点
-	TiXmlElement *Book1 = new TiXmlElement("Book1");
-	// 插入属性
-	Book1->SetAttribute("ID", 1);
-	Book1->SetAttribute("Name", "水浒传");
-	Book1->SetAttribute("Price", "64.6");
+    TiXmlText *bookText = new TiXmlText("书本"); // 创建文本
+    Book->LinkEndChild(bookText);                // 给Book节点添加文本
+    node1->LinkEndChild(Book);                   // 插入到根节点下
 
-	// 创建Book1的子节点Description
-	TiXmlElement *Description = new TiXmlElement("Description");
-	TiXmlText *descriptionText = new TiXmlText("108个拆迁户");		// 创建文本
-	Description->LinkEndChild(descriptionText);		// 给Description节点添加文本
-	Book1->LinkEndChild(Description);				// 插入到Book1节点下
+    // 如果只是想在控制台打印而已，那么可以直接调用函数tinyXmlDoc->Print();就可以实现在控制台上打印出来了！
+    // tinyXmlDoc->Print();
+    bool result = tinyXmlDoc->SaveFile("test.xml");
+    if (!result)
+        printf("%s\n", tinyXmlDoc->ErrorDesc());
+    else
+        printf("创建XML文件成功\n");
 
-	// 创建Book1的子节点Page
-	TiXmlElement *Page = new TiXmlElement("Page");
-	TiXmlText *pageText = new TiXmlText("100页");		// 创建文本
-	Page->LinkEndChild(pageText);	// 给Page节点添加文本
-	Book1->LinkEndChild(Page);		// 插入到Book1节点下
-
-	Library->LinkEndChild(Book1);	// 插入到根节点下
-
-	// 保存到文件	
-	bool result = tinyXmlDoc->SaveFile(FILE_NAME);
-	if (result == true) printf("文件写入成功！\n");
-	else printf("文件写入失败！\n");
-
-	// 打印出来看看
-	//tinyXmlDoc->Print();
-    
-	TiXmlPrinter printer;
-	tinyXmlDoc->Accept(&printer);
-	printf("%s\n", printer.CStr());
+    TiXmlPrinter printer;
+    tinyXmlDoc->Accept(&printer);
+    printf("%s\n", printer.CStr());
+    return 0;
 }
 ```
 
+------
 
+# 2.解析XML文件
 
-例：在上面创建的xml文件基础上，添加两个Book1子节点。
+## 1.导入文件
 
-1. 定义一个xml文件类，并读取文件中的xml内容初始化它
-这里有两种方式，有点奇怪，当使用第一种方式读取xml文件时，xml中有多个子节点Book1时，由于属性都有相同的id、name、price，导致会读取失败，不得已让我搞出了第二种方式去读取进行初始化，这样就没问题！
+导入文件并读取文件中的xml内容，然后初始化它，这里有两种方式。
 
-1). 方式1
-// 定义一个TiXmlDocument类指针
-TiXmlDocument* tinyXmlDoc = new TiXmlDocument;
+- **方式1**
 
-// 读取文件中的xml
-if (!tinyXmlDoc->LoadFile(FILE_NAME)) {
-	// 读取失败，打印失败原因
-	printf("Could not load example xml file %s. Error='%s'\n", FILE_NAME, tinyXmlDoc->ErrorDesc());
-	return ;
-}
-1
-2
-3
-4
-5
-6
-7
-8
-9
-读取失败显示：
+  ```c++
+  int main(int argc, char *argv[])
+  {
+  
+      // 定义一个TiXmlDocument类指针
+      TiXmlDocument *tinyXmlDoc = new TiXmlDocument;
+      // 读取文件中的xml
+      if (!tinyXmlDoc->LoadFile("oopmenu.xml"))
+      {
+          // 读取失败，打印失败原因
+          printf("Could not load example xml file %s. Error='%s'\n", "oopmenu.xml", tinyXmlDoc->ErrorDesc());
+          return -1;
+      }
+      else
+          printf("导入文件成功!!!\n");
+      return 0;
+  }
+  ```
 
+  ```bash
+  root@cqr40:~# ./app
+  导入文件成功!!!
+  root@cqr40:~# 
+  ```
 
-2). 方式2
-定义xml文档类对象时指定文件名，然后在使用这个对象去调用LoadFile传参TIXML_ENCODING_LEGACY即可，具体传参是什么意思，我也不清楚，自己摸索出来的，其中有三个枚举可以选择，其他两个都不行，就这个可以！
+- **方式2**
+  定义xml文档类对象时指定文件名，然后在使用这个对象去调用LoadFile传参TIXML_ENCODING_LEGACY等三个枚举值即可。
 
-// 定义xml文档类对象时指定文件名
-TiXmlDocument* tinyXmlDoc = new TiXmlDocument(FILE_NAME);
-// 然后在使用这个对象去调用LoadFile传参TIXML_ENCODING_LEGACY即可
-tinyXmlDoc->LoadFile(TIXML_ENCODING_LEGACY);
-1
-2
-3
-4
-我一般都是，第一种方式用不了，就用第二种方式初始化！
+  ```c++
+      TiXmlDocument *tinyXmlDoc = new TiXmlDocument("oopmenu.xml");
+      // 然后在使用这个对象去调用LoadFile传参TIXML_ENCODING_LEGACY即可
+      if (!tinyXmlDoc->LoadFile(TIXML_ENCODING_LEGACY))
+      {
+          printf("Could not load example xml file %s. Error='%s'\n", "oopmenu.xml", tinyXmlDoc->ErrorDesc());
+          return -1;
+      }
+      else
+          printf("导入文件成功!!!\n");
+  ```
 
-3). 对已存在的数据进行初始化
-std::string data;	// 这里默认data是存储xml数据的字符串变量
+  ```bash
+  root@cqr40:~# ./app
+  导入文件成功!!!
+  root@cqr40:~# 
 
-/* 方式一： */
-// 定义一个TiXmlDocument类指针
-TiXmlDocument* tinyXmlDoc = new TiXmlDocument();
-// 数据初始化
-tinyXmlDoc->Parse(data.c_str());
+## 2.获取头部信息
 
-/* 方式二： */
-// 定义一个TiXmlDocument类指针
-TiXmlDocument* tinyXmlDoc = new TiXmlDocument(data.c_str());
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-4). 也可以获取头部信息中的版本号和编码
-// 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
-TiXmlDeclaration *pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
-if (pDeclar != NULL) {
-	printf("头部信息： version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
-}
-1
-2
-3
-4
-5
-2. 获取根节点
-这个定义是需要指定参数根节点的名字，然后再通过RootElement方法获取。
+```c++
 
-TiXmlElement *Library = new TiXmlElement("Library");
-Library = tinyXmlDoc->RootElement();
-1
-2
-3. 创建Book1节点，并设置属性
+    // 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
+    TiXmlDeclaration *pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
+    if (pDeclar != NULL)
+    {
+        printf("头部信息： version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
+    }
+```
+
+```bash
+root@cqr40:~# ./app
+导入文件成功!!!
+头部信息： version is 1.0 , encoding is GB2312
+```
+
+## 3.获取根节点
+
+这个定义不一定是需要指定参数根节点的名字，然后再通过RootElement方法获取。
+
+```c++
+    // 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
+    TiXmlDeclaration *pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
+    if (pDeclar != NULL)
+    {
+        printf("头部信息： version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
+    }
+
+    TiXmlElement *Library =  tinyXmlDoc->RootElement();
+    if(Library == NULL)
+        printf("%s\n",tinyXmlDoc->ErrorDesc());
+    else
+        printf("获取根节点成功\n");
+    //Library =
+    return 0;
+```
+
+```bash
+导入文件成功!!!
+头部信息： version is 1.0 , encoding is GB2312
+获取根节点成功
+root@cqr40:~# 
+```
+
+## 3.创建Book1节点，并设置属性
+
+```c++
 TiXmlElement *Book1 = new TiXmlElement("Book1");
 // 插入属性
 Book1->SetAttribute("ID", 2);
 Book1->SetAttribute("Name", "西游记");
 Book1->SetAttribute("Price", "99.81");
-1
-2
-3
-4
-5
-假设创建好后，在xml文件中是这样显示的：
+```
 
+## 4.创建Book1的子节点Description 和 Page
 
-4. 创建Book1的子节点Description 和 Page
 和上面创建的思路代码是一样的，创建好后在插入到Book1节点中就好了
 
+```c++
 // 创建Book1的子节点Description
 TiXmlElement *Description = new TiXmlElement("Description");
 TiXmlText *descriptionText = new TiXmlText("师徒四人");		// 创建文本
@@ -443,32 +492,17 @@ TiXmlElement *Page = new TiXmlElement("Page");
 TiXmlText *pageText = new TiXmlText("81页");		// 创建文本
 Page->LinkEndChild(pageText);	// 给Page节点添加文本
 Book1->LinkEndChild(Page);		// 插入到Book1节点下
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-假设创建好后，在xml文件中是这样显示的：
+```
 
 
 5. 将Book1节点添加到根节点中
 Library->LinkEndChild(Book1);	// 插入到根节点下
-1
+
 6. 将doc写入xml文件
 // 保存到文件	
 bool result = tinyXmlDoc->SaveFile(FILE_NAME);
 if (result == true) printf("文件写入成功！\n");
 else printf("文件写入失败！\n");
-1
-2
-3
-4
 7. 为已存在的xml文件添加节点元素，总代码如下
 	void add_XML() {
 	printf("\n----- add_XML -----\n");
@@ -543,79 +577,7 @@ else printf("文件写入失败！\n");
 	tinyXmlDoc->Print();
 }
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-69
-70
-71
-72
-执行完如上代码，会在xml文件中添加指定的节点元素，如下图
+
 
 可以看到，创建相同子节点的代码都是一样的，也就是说，当需要创建几十个这个的子节点时，可以使用for循环去处理，至于数据可以使用数组是事先存储即可！
 
@@ -634,9 +596,7 @@ else printf("文件写入失败！\n");
 // 创建时需要指定名称
 TiXmlElement *Library = new TiXmlElement("Library");
 Library = tinyXmlDoc->RootElement();
-1
-2
-3
+
 3. 删除Book节点
 像这种只有自己本身的，没有其他子节点的节点，它有两种方式去删除
 
@@ -646,18 +606,14 @@ Library = tinyXmlDoc->RootElement();
 // 方式一
 TiXmlElement* Book = Library->FirstChildElement("Book");
 Book->Clear();
-1
-2
-3
+
 2). 方式二
 获取到对应节点后，根节点调用RemoveChild去删除，传参时需要对变量转换一下
 
 // 获取Book节点
 TiXmlElement* Book = Library->FirstChildElement("Book");
 Library->RemoveChild(Book->ToElement());
-1
-2
-3
+
 建议还是使用第二种方式
 
 a. 当然，如果Book节点不止一个时，如果需要删除特定的几个，可以使用for循环去删除
@@ -687,24 +643,7 @@ for (; pItem1 != NULL; ) {
 	}
 }
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
+
 用if判断，然后符合条件进行删除即可!
 
 这里讲一下if里面的操作：
@@ -735,16 +674,7 @@ for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
 		pItem->RemoveAttribute("Name");
 	}
 }
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
+
 假设执行完，xml中将会是这样：
 
 
@@ -773,25 +703,7 @@ for (; pItem != NULL; ) {
 	}
 }
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
+
 假设执行完，xml中将会是这样：
 
 
@@ -800,10 +712,7 @@ for (; pItem != NULL; ) {
 bool result = tinyXmlDoc->SaveFile(FILE_NAME);
 if (result == true) printf("文件写入成功！\n");
 else printf("文件写入失败！\n");
-1
-2
-3
-4
+
 7. 删除总代码如下
 	void del_XML() {
 	printf("\n----- del_XML -----\n");
@@ -900,102 +809,6 @@ else printf("文件写入失败！\n");
 	tinyXmlDoc->Print();
 
 }
-
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
-65
-66
-67
-68
-69
-70
-71
-72
-73
-74
-75
-76
-77
-78
-79
-80
-81
-82
-83
-84
-85
-86
-87
-88
-89
-90
-91
-92
-93
-94
-95
 执行后xml文件如下图：
 
 
@@ -1021,14 +834,6 @@ for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
 		pItem->SetAttribute("Price", "33.33");
 	}
 }
-1
-2
-3
-4
-5
-6
-7
-8
 执行后xml文件如下图：
 
 
@@ -1050,21 +855,7 @@ for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
 		page->SetValue("999页");
 	}
 }
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
+
 执行后xml文件如下图：
 
 
@@ -1075,10 +866,7 @@ for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
 bool result = tinyXmlDoc->SaveFile(FILE_NAME);
 if (result == true) printf("文件写入成功！\n");
 else printf("文件写入失败！\n");
-1
-2
-3
-4
+
 6. 修改xml中的节点值，代码汇总
 	void alt_XML() {
 	printf("\n----- alt_XML -----\n");
@@ -1129,54 +917,7 @@ else printf("文件写入失败！\n");
 	tinyXmlDoc->Print();
 }
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
+
 执行完如下效果：
 
 
@@ -1198,10 +939,7 @@ TiXmlElement* Book = Library->FirstChildElement("Book");
 if (Book) {
 	printf("Book = %s\n\n", Book->GetText());
 }
-1
-2
-3
-4
+
 4. 解析所有的Book1节点的属性
 直接调用Attribute，传入属性名即可获得属性的值；
 
@@ -1220,21 +958,7 @@ if (pItem) {
 		printf("\n\n");
 	}
 }
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
+
 5. 解析所有的Book1节点的子节点
 获得对应解析的节点后，调用GetText可以获得里面的值；
 
@@ -1252,20 +976,7 @@ if (pItem) {
 		printf("\n\n");
 	}
 }
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
+
 解析控制台输出如下
 
 
@@ -1333,79 +1044,10 @@ if (pItem) {
 			printf("\n\n");
 		}
 	}
-}
 
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10
-11
-12
-13
-14
-15
-16
-17
-18
-19
-20
-21
-22
-23
-24
-25
-26
-27
-28
-29
-30
-31
-32
-33
-34
-35
-36
-37
-38
-39
-40
-41
-42
-43
-44
-45
-46
-47
-48
-49
-50
-51
-52
-53
-54
-55
-56
-57
-58
-59
-60
-61
-62
-63
-64
 七、总结
 到此，使用tinyxml操作xml文件的教程已经完毕了，相信学到这里的童鞋们应该会如何使用了，那快做项目去吧！
 
 代码中使用了很多指针，但是都没有进行释放，为什么呢？
 我在网上找过了，网上都说，类结束后会自动释放，不知真假！
-————————————————
 
-                            版权声明：本文为博主原创文章，遵循 CC 4.0 BY-SA 版权协议，转载请附上原文出处链接和本声明。
-
-原文链接：https://blog.csdn.net/cpp_learner/article/details/122286597
