@@ -367,7 +367,7 @@ int main(int argc, char *argv[])
 
 ------
 
-# 2.解析XML文件
+# 2.修改XML文件
 
 ## 1.导入文件
 
@@ -466,155 +466,91 @@ root@cqr40:~# ./app
 root@cqr40:~# 
 ```
 
-## 3.创建Book1节点，并设置属性
+## 4.为已存在的xml文件添加节点元素
 
 ```c++
-TiXmlElement *Book1 = new TiXmlElement("Book1");
-// 插入属性
-Book1->SetAttribute("ID", 2);
-Book1->SetAttribute("Name", "西游记");
-Book1->SetAttribute("Price", "99.81");
+void add_XML() 
+{
+    printf("\n----- add_XML -----\n");
+    // 定义一个TiXmlDocument类指针
+    TiXmlDocument* tinyXmlDoc = new TiXmlDocument(FILE_NAME);
+    tinyXmlDoc->LoadFile(TIXML_ENCODING_LEGACY);
+
+    // 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
+    TiXmlDeclaration *pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
+    if (pDeclar != NULL) {
+        printf("头部信息： version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
+    }
+
+    // 得到文件根节点
+    TiXmlElement *Library = new TiXmlElement("Library");
+    Library = tinyXmlDoc->RootElement();
+
+    // 创建Book1节点
+    TiXmlElement *Book1 = new TiXmlElement("Book1");
+    // 插入属性
+    Book1->SetAttribute("ID", 2);
+    Book1->SetAttribute("Name", "西游记");
+    Book1->SetAttribute("Price", "99.81");
+
+    // 创建Book1的子节点Description
+    TiXmlElement *Description = new TiXmlElement("Description");
+    TiXmlText *descriptionText = new TiXmlText("师徒四人");		// 创建文本
+    Description->LinkEndChild(descriptionText);		// 给Description节点添加文本
+    Book1->LinkEndChild(Description);				// 插入到Book1节点下
+
+    // 创建Book1的子节点Page
+    TiXmlElement *Page = new TiXmlElement("Page");
+    TiXmlText *pageText = new TiXmlText("81页");		// 创建文本
+    Page->LinkEndChild(pageText);	// 给Page节点添加文本
+    Book1->LinkEndChild(Page);		// 插入到Book1节点下
+
+    Library->LinkEndChild(Book1);	// 插入到根节点下
+
+    // 保存到文件	
+    bool result = tinyXmlDoc->SaveFile(FILE_NAME);
+    if (result == true) printf("文件写入成功！\n");
+    else printf("文件写入失败！\n");
+
+    // 打印出来看看
+    tinyXmlDoc->Print();
 ```
-
-## 4.创建Book1的子节点Description 和 Page
-
-和上面创建的思路代码是一样的，创建好后在插入到Book1节点中就好了
-
-```c++
-// 创建Book1的子节点Description
-TiXmlElement *Description = new TiXmlElement("Description");
-TiXmlText *descriptionText = new TiXmlText("师徒四人");		// 创建文本
-Description->LinkEndChild(descriptionText);		// 给Description节点添加文本
-Book1->LinkEndChild(Description);				// 插入到Book1节点下
-
-// 创建Book1的子节点Page
-TiXmlElement *Page = new TiXmlElement("Page");
-TiXmlText *pageText = new TiXmlText("81页");		// 创建文本
-Page->LinkEndChild(pageText);	// 给Page节点添加文本
-Book1->LinkEndChild(Page);		// 插入到Book1节点下
-```
-
-
-5. 将Book1节点添加到根节点中
-Library->LinkEndChild(Book1);	// 插入到根节点下
-
-6. 将doc写入xml文件
-// 保存到文件	
-bool result = tinyXmlDoc->SaveFile(FILE_NAME);
-if (result == true) printf("文件写入成功！\n");
-else printf("文件写入失败！\n");
-7. 为已存在的xml文件添加节点元素，总代码如下
-	void add_XML() {
-	printf("\n----- add_XML -----\n");
-
-	// 定义一个TiXmlDocument类指针
-	TiXmlDocument* tinyXmlDoc = new TiXmlDocument(FILE_NAME);
-	tinyXmlDoc->LoadFile(TIXML_ENCODING_LEGACY);
-
-	// 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
-	TiXmlDeclaration *pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
-	if (pDeclar != NULL) {
-		printf("头部信息： version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
-	}
-
-	// 得到文件根节点
-	TiXmlElement *Library = new TiXmlElement("Library");
-	Library = tinyXmlDoc->RootElement();
-
-
-	// 创建Book1节点
-	TiXmlElement *Book1 = new TiXmlElement("Book1");
-	// 插入属性
-	Book1->SetAttribute("ID", 2);
-	Book1->SetAttribute("Name", "西游记");
-	Book1->SetAttribute("Price", "99.81");
-	
-	// 创建Book1的子节点Description
-	TiXmlElement *Description = new TiXmlElement("Description");
-	TiXmlText *descriptionText = new TiXmlText("师徒四人");		// 创建文本
-	Description->LinkEndChild(descriptionText);		// 给Description节点添加文本
-	Book1->LinkEndChild(Description);				// 插入到Book1节点下
-	
-	// 创建Book1的子节点Page
-	TiXmlElement *Page = new TiXmlElement("Page");
-	TiXmlText *pageText = new TiXmlText("81页");		// 创建文本
-	Page->LinkEndChild(pageText);	// 给Page节点添加文本
-	Book1->LinkEndChild(Page);		// 插入到Book1节点下
-	
-	Library->LinkEndChild(Book1);	// 插入到根节点下
-
-
-
-
-	// 创建Book1节点
-	Book1 = new TiXmlElement("Book1");
-	// 插入属性
-	Book1->SetAttribute("ID", 3);
-	Book1->SetAttribute("Name", "三国演义");
-	Book1->SetAttribute("Price", "66.66");
-	
-	// 创建Book1的子节点Description
-	Description = new TiXmlElement("Description");
-	descriptionText = new TiXmlText("三国大战");		// 创建文本
-	Description->LinkEndChild(descriptionText);		// 给Description节点添加文本
-	Book1->LinkEndChild(Description);				// 插入到Book1节点下
-	
-	// 创建Book1的子节点Page
-	Page = new TiXmlElement("Page");
-	pageText = new TiXmlText("30页");		// 创建文本
-	Page->LinkEndChild(pageText);	// 给Page节点添加文本
-	Book1->LinkEndChild(Page);		// 插入到Book1节点下
-	
-	Library->LinkEndChild(Book1);	// 插入到根节点下
-
-
-	// 保存到文件	
-	bool result = tinyXmlDoc->SaveFile(FILE_NAME);
-	if (result == true) printf("文件写入成功！\n");
-	else printf("文件写入失败！\n");
-	
-	// 打印出来看看
-	tinyXmlDoc->Print();
-}
-
-
 
 可以看到，创建相同子节点的代码都是一样的，也就是说，当需要创建几十个这个的子节点时，可以使用for循环去处理，至于数据可以使用数组是事先存储即可！
 
-四、删除
-删除子节点
+## 5.删除
 
-例：
-/* 删除book 和 其中一个book1节点 和 其中一个属性 */
+### 1.删除子节点
 
-1. 定义一个xml文件类，并读取文件中的xml内容初始化它
-和上面 三、添加 的第1步骤 一样…
+删除book 和 其中一个book1节点 和 其中一个属性 
 
-2. 获取根节点
-这个定义是需要指定参数根节点的名字，然后再通过RootElement方法获取。
+1. **定义xml文件类**
+   定义一个xml文件类，并读取文件中的xml内容初始化它和上面添加的第1步骤 一样。
 
-// 创建时需要指定名称
-TiXmlElement *Library = new TiXmlElement("Library");
-Library = tinyXmlDoc->RootElement();
+2. **获取根节点**
+   这个定义是需要指定参数根节点的名字，然后再通过RootElement方法获取。创建时需要指定名称
 
-3. 删除Book节点
-像这种只有自己本身的，没有其他子节点的节点，它有两种方式去删除
+   ```c++
+   TiXmlElement *Library = new TiXmlElement("Library");
+   Library = tinyXmlDoc->RootElement();
+   ```
 
-1). 方式一
-获取到对应节点后调用Clear()方法去删除。
+3. **删除Book节点**
+   像这种只有自己本身的，没有其他子节点的节点，它有两种方式去删除
 
-// 方式一
-TiXmlElement* Book = Library->FirstChildElement("Book");
-Book->Clear();
+   ```c++
+   //1). 方式一
+   //获取到对应节点后调用Clear()方法去删除。
+   TiXmlElement* Book = Library->FirstChildElement("Book");
+   Book->Clear();
+   
+   //2). 方式二
+   //获取到对应节点后，根节点调用RemoveChild去删除，传参时需要对变量转换一下
+   TiXmlElement* Book = Library->FirstChildElement("Book");
+   Library->RemoveChild(Book->ToElement());
+   ```
 
-2). 方式二
-获取到对应节点后，根节点调用RemoveChild去删除，传参时需要对变量转换一下
-
-// 获取Book节点
-TiXmlElement* Book = Library->FirstChildElement("Book");
-Library->RemoveChild(Book->ToElement());
-
-建议还是使用第二种方式
+   
 
 a. 当然，如果Book节点不止一个时，如果需要删除特定的几个，可以使用for循环去删除
 判断文本，符合条件就删除
