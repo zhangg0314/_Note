@@ -466,6 +466,7 @@ root@cqr40:~# ./app
 root@cqr40:~# 
 ```
 
+<<<<<<< HEAD:嵌入式开发笔记/02_嵌入式数据存储/03_XML.md
 ## 4.为已存在的xml文件添加节点元素
 
 ```c++
@@ -594,396 +595,253 @@ for (; pItem1 != NULL; ) {
 
 4. 删除属性
 可以使用直接写全代码的方式去删除，如上面的方式二一样，也可以使用for循环，然后用符合条件后去删除，这里就是使用了for循环去删除属性。
+=======
+## 4.删除
+
+### 1.删除子节点
+
+/* 删除book 和 其中一个book1节点 和 其中一个属性 */
+
+1. 定义一个xml文件类，并读取文件中的xml内容初始化它
+
+2. 获取根节点
+  这个定义是需要指定参数根节点的名字，然后再通过RootElement方法获取。
+
+  ```c++
+  // 创建时需要指定名称
+  TiXmlElement *Library = new TiXmlElement("Library");
+  Library = tinyXmlDoc->RootElement();
+  ```
+
+3. 删除Book节点
+  像这种只有自己本身的，没有其他子节点的节点，它有两种方式去删除。
+
+  ```c++
+  //1). 方式一
+  //获取到对应节点后调用Clear()方法去删除。
+  TiXmlElement* Book = Library->FirstChildElement("Book");
+  Book->Clear();
+  
+  //2). 方式二
+  //获取到对应节点后，根节点调用RemoveChild去删除，传参时需要对变量转换一下
+  
+  // 获取Book节点
+  TiXmlElement* Book = Library->FirstChildElement("Book");
+  Library->RemoveChild(Book->ToElement());
+  ```
+
+4. 删除多个节点
+
+  ```c++
+  //当然，如果Book节点不止一个时，如果需要删除特定的几个，可以使用for循环去删除, 判断文本，符合条件就删除
+  //调用FirstChildElement方法，传入子节点名字，可以获得第一个相同名字的子节点
+  //调用NextSiblingElement方法，传入节点名字，可以获得下一个相同名字的节点
+  //用RemoveChild方法，是父节点删除子节点的方法
+  
+  TiXmlElement* pItem1 = Library->FirstChildElement("Book");
+  for (; pItem1 != NULL; ) {
+      if (strncmp(pItem1->GetText(), "书本", 6) == 0) {
+          // 提前存储删除节点的下一个节点
+          TiXmlElement* temporary = pItem1->NextSiblingElement("Book1");
+  
+          // 删除当前节点，删除后pItem为NULL，如果再继续使用它会报错
+          Library->RemoveChild(pItem1->ToElement());
+  
+          // 所以这里要进行赋值回来
+          pItem1 = temporary;
+  
+      } else {
+          // 寻找下一个Book1节点
+          pItem1 = pItem1->NextSiblingElement("Book1");
+      }
+  }
+  ```
+
+### 2.删除属性
+>>>>>>> 84f2f32639588d1eeca7b37d05c6d83c6d772733:嵌入式开发笔记/06_嵌入式数据持久化存储/03_XML.md
 
 删除属性直接删除即可，不需要做其他什么操作！
 
-调用Attribute方法，传入属性名可以获得属性的值
-调用RemoveAttribute方法，传入属性名可以进行删除
+- 调用Attribute方法，传入属性名可以获得属性的值
+- 调用RemoveAttribute方法，传入属性名可以进行删除
 
+```c++
 // 删除属性
 TiXmlElement* pItem = Library->FirstChildElement("Book1");
 for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
-
-	// 找到属性ID = 1的节点
-	if (strcmp(pItem->Attribute("ID"), "1") == 0) {
-		// 删除属性为Name的属性
-		pItem->RemoveAttribute("Name");
-	}
+    // 找到属性ID = 1的节点
+    if (strcmp(pItem->Attribute("ID"), "1") == 0) {
+        // 删除属性为Name的属性
+        pItem->RemoveAttribute("Name");
+    }
 }
+```
+### 3.删除整个节点
 
-假设执行完，xml中将会是这样：
-
-
-5. 删除整个节点
 思路和上面删除Book节点一样
 
-这里是删除ID属性为2的Book1节点
+```c++
+//这里是删除ID属性为2的Book1节点
 
 pItem = Library->FirstChildElement("Book1");
 for (; pItem != NULL; ) {
+    // 找到属性ID = 2的节点
+    if (strcmp(pItem->Attribute("ID"), "2") == 0) {
+        // 提前存储删除节点的下一个节点
+        TiXmlElement* temporary = pItem->NextSiblingElement("Book1");
 
-	// 找到属性ID = 2的节点
-	if (strcmp(pItem->Attribute("ID"), "2") == 0) {
-		// 提前存储删除节点的下一个节点
-		TiXmlElement* temporary = pItem->NextSiblingElement("Book1");
-	
-		// 删除当前节点，删除后pItem为NULL，如果再继续使用它会报错
-		Library->RemoveChild(pItem->ToElement());
-	
-		// 所以这里要进行赋值回来
-		pItem = temporary;
-		
-	} else {
-		// 寻找下一个Book1节点
-		pItem = pItem->NextSiblingElement("Book1");
-	}
+        // 删除当前节点，删除后pItem为NULL，如果再继续使用它会报错
+        Library->RemoveChild(pItem->ToElement());
+
+        // 所以这里要进行赋值回来
+        pItem = temporary;
+
+    } else {
+        // 寻找下一个Book1节点
+        pItem = pItem->NextSiblingElement("Book1");
+    }
 }
+```
+## 5.修改
 
-
-假设执行完，xml中将会是这样：
-
-
-6. 将doc写入xml文件
-// 保存到文件	
-bool result = tinyXmlDoc->SaveFile(FILE_NAME);
-if (result == true) printf("文件写入成功！\n");
-else printf("文件写入失败！\n");
-
-7. 删除总代码如下
-	void del_XML() {
-	printf("\n----- del_XML -----\n");
-
-	// 定义一个TiXmlDocument类指针
-	TiXmlDocument* tinyXmlDoc = new TiXmlDocument(FILE_NAME);
-	tinyXmlDoc->LoadFile(TIXML_ENCODING_LEGACY);
-
-	// 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
-	TiXmlDeclaration *pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
-	if (pDeclar != NULL) {
-		printf("头部信息： version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
-	}
-
-	// 得到文件根节点
-	TiXmlElement *Library = new TiXmlElement("Library");
-	Library = tinyXmlDoc->RootElement();
-
-
-	/* 删除 Book 节点 */
-	// 方式一
-	//TiXmlElement* Book = Library->FirstChildElement("Book");
-	//Book->Clear();
-
-
-	// 方式二
-	// 获取Book节点
-	TiXmlElement* Book = Library->FirstChildElement("Book");
-	Library->RemoveChild(Book->ToElement());
-
-
-	//TiXmlElement* pItem1 = Library->FirstChildElement("Book");
-	//for (; pItem1 != NULL; ) {
-	
-	//	if (strncmp(pItem1->GetText(), "书本", 6) == 0) {
-	//		// 提前存储删除节点的下一个节点
-	//		TiXmlElement* temporary = pItem1->NextSiblingElement("Book1");
-	
-	//		// 删除当前节点，删除后pItem为NULL，如果再继续使用它会报错
-	//		Library->RemoveChild(pItem1->ToElement());
-	
-	//		// 所以这里要进行赋值回来
-	//		pItem1 = temporary;
-	//	
-	//	} else {
-	//		// 寻找下一个Book1节点
-	//		pItem1 = pItem1->NextSiblingElement("Book1");
-	//	}
-	//}
-
-
-
-	// 删除属性
-	TiXmlElement* pItem = Library->FirstChildElement("Book1");
-	for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
-	
-		// 找到属性ID = 1的节点
-		if (strcmp(pItem->Attribute("ID"), "1") == 0) {
-			// 删除属性为Name的属性
-			pItem->RemoveAttribute("Name");
-		}
-	}
-	
-	// 删除整个节点
-	pItem = Library->FirstChildElement("Book1");
-	for (; pItem != NULL; ) {
-	
-		// 找到属性ID = 2的节点
-		if (strcmp(pItem->Attribute("ID"), "2") == 0) {
-			// 提前存储删除节点的下一个节点
-			TiXmlElement* temporary = pItem->NextSiblingElement("Book1");
-	
-			// 删除当前节点，删除后pItem为NULL，如果再继续使用它会报错
-			Library->RemoveChild(pItem->ToElement());
-	
-			// 所以这里要进行赋值回来
-			pItem = temporary;
-		
-		} else {
-			// 寻找下一个Book1节点
-			pItem = pItem->NextSiblingElement("Book1");
-		}
-	}
-
-
-
-
-	// 保存到文件	
-	bool result = tinyXmlDoc->SaveFile(FILE_NAME);
-	if (result == true) printf("文件写入成功！\n");
-	else printf("文件写入失败！\n");
-	
-	// 打印出来看看
-	tinyXmlDoc->Print();
-
-}
-执行后xml文件如下图：
-
-
-五、修改
 修改(更改)XML中节点的值
 
 例：将ID属性为3的Book1节点的Price属性值修改为33.33；将ID属性为1的Book1节点的Description子节点值修改为108个没房住，Page修改为999页。
 
 1. 定义一个xml文件类，并读取文件中的xml内容初始化它
-和上面 三、添加 的第1步骤 一样…
 
 2. 获取根节点
-和上面 三、添加 的第2步骤 一样…
 
 3. 修改属性值
-符合条件后使用SetAttribute方法即可进行重新修改属性
+  符合条件后使用SetAttribute方法即可进行重新修改属性
 
-TiXmlElement* pItem = Library->FirstChildElement("Book1");
-for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
-
-	// 设置属性
-	if (strcmp(pItem->Attribute("ID"), "3") == 0) {
-		pItem->SetAttribute("Price", "33.33");
-	}
-}
-执行后xml文件如下图：
+  ```c++
+  TiXmlElement* pItem = Library->FirstChildElement("Book1");
+  for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
+      // 设置属性
+      if (strcmp(pItem->Attribute("ID"), "3") == 0) {
+          pItem->SetAttribute("Price", "33.33")
+      }
+  }
+  ```
 
 
 4. 修改节点值
-首先使用FirstChildElement获得对应节点后，在使用FirstChild获得需要修改的文本指针对象，最后在调用SetValue就可以进行修改了
+  首先使用FirstChildElement获得对应节点后，在使用FirstChild获得需要修改的文本指针对象，最后在调用SetValue就可以进行修改了
 
-TiXmlElement* pItem = Library->FirstChildElement("Book1");
-for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
+  ```c++
+  TiXmlElement* pItem = Library->FirstChildElement("Book1");
+  for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
+      // 找到属性ID = 1的节点
+      if (strcmp(pItem->Attribute("ID"), "1") == 0) {
+          // 设置Book1的子节点Description的值
+          TiXmlElement* Description = pItem->FirstChildElement("Description");	// 获得<Description>108个没房住</Description>
+          TiXmlNode* des = Description->FirstChild();	// 获取元素指针	// 获得存储 108个没房住 的指针
+          des->SetValue("108个没房住");	// 重新为其设置值
+  
+          TiXmlElement *Page = pItem->FirstChildElement("Page");
+          TiXmlNode *page = Page->FirstChild();
+          page->SetValue("999页");
+      }
+  ```
 
-	// 找到属性ID = 1的节点
-	if (strcmp(pItem->Attribute("ID"), "1") == 0) {
-		// 设置Book1的子节点Description的值
-		TiXmlElement* Description = pItem->FirstChildElement("Description");	// 获得<Description>108个没房住</Description>
-		TiXmlNode* des = Description->FirstChild();	// 获取元素指针	// 获得存储 108个没房住 的指针
-		des->SetValue("108个没房住");	// 重新为其设置值
-	
-		TiXmlElement *Page = pItem->FirstChildElement("Page");
-		TiXmlNode *page = Page->FirstChild();
-		page->SetValue("999页");
-	}
-}
+## 6.解析
 
-执行后xml文件如下图：
-
-
-其实修改属性和修改节点值可以放在同一个for循环中去操作的！
-
-5. 将doc写入xml文件
-// 保存到文件	
-bool result = tinyXmlDoc->SaveFile(FILE_NAME);
-if (result == true) printf("文件写入成功！\n");
-else printf("文件写入失败！\n");
-
-6. 修改xml中的节点值，代码汇总
-	void alt_XML() {
-	printf("\n----- alt_XML -----\n");
-
-	// 定义一个TiXmlDocument类指针
-	TiXmlDocument* tinyXmlDoc = new TiXmlDocument(FILE_NAME);
-	tinyXmlDoc->LoadFile(TIXML_ENCODING_LEGACY);
-
-	// 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
-	TiXmlDeclaration *pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
-	if (pDeclar != NULL) {
-		printf("头部信息： version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
-	}
-
-	// 得到文件根节点
-	TiXmlElement *Library = new TiXmlElement("Library");
-	Library = tinyXmlDoc->RootElement();
-
-
-	TiXmlElement* pItem = Library->FirstChildElement("Book1");
-	for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
-	
-		// 找到属性ID = 1的节点
-		if (strcmp(pItem->Attribute("ID"), "1") == 0) {
-			// 设置Book1的子节点Description的值
-			TiXmlElement* Description = pItem->FirstChildElement("Description");	// 获得<Description>108个没房住</Description>
-			TiXmlNode* des = Description->FirstChild();	// 获取元素指针		// 获得存储 108个没房住 的指针
-			des->SetValue("108个没房住");	// 重新为其设置值				
-	
-			TiXmlElement *Page = pItem->FirstChildElement("Page");
-			TiXmlNode *page = Page->FirstChild();
-			page->SetValue("999页");
-		}
-	
-		// 设置属性
-		if (strcmp(pItem->Attribute("ID"), "3") == 0) {
-			pItem->SetAttribute("Price", "33.33");
-		}
-	}
-
-
-	// 保存到文件	
-	bool result = tinyXmlDoc->SaveFile(FILE_NAME);
-	if (result == true) printf("文件写入成功！\n");
-	else printf("文件写入失败！\n");
-	//printf("%s\n", tinyXmlDoc->Value());
-	// 打印出来看看
-	tinyXmlDoc->Print();
-}
-
-
-执行完如下效果：
-
-
-六、解析
-解析指定节点中值
+### 1.解析指定节点中值
 
 1. 定义一个xml文件类，并读取文件中的xml内容初始化它
-和上面 三、添加 的第1步骤 一样…
 
 2. 获取根节点
-和上面 三、添加 的第2步骤 一样…
 
-3. 解析Book节点
-当然，前面已将Book节点删掉了，所以获取到的Book为NULL
+3. 解析Book节点，当然，前面已将Book节点删掉了，所以获取到的Book为NULL所以如果是指针，在使用前最好先判断一下再去使用！
 
-所以如果是指针，在使用前最好先判断一下再去使用！
+  ```c++
+  TiXmlElement* Book = Library->FirstChildElement("Book");
+  if (Book) {
+  	printf("Book = %s\n\n", Book->GetText());
+  }
+  ```
 
-TiXmlElement* Book = Library->FirstChildElement("Book");
-if (Book) {
-	printf("Book = %s\n\n", Book->GetText());
-}
+4. 解析所有的Book1节点的属性，直接调用Attribute，传入属性名即可获得属性的值。
 
-4. 解析所有的Book1节点的属性
-直接调用Attribute，传入属性名即可获得属性的值；
+  ```c++
+  /* 当有多个相同名字的节点时，可以使用循环进行读取解析 */
+  // 函数FirstChildElement()	:	找到指定名字的元素
+  // 函数NextSiblingElement	:	在同一级元素中查找下一个指定名字的元素
+  TiXmlElement* pItem = Library->FirstChildElement("Book1");
+  if (pItem) {
+  	for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
+  	// 解析属性
+  	printf("ID = %s\n", pItem->Attribute("ID"));
+  	printf("Name = %s\n", pItem->Attribute("Name"));
+  	printf("Price = %s\n", pItem->Attribute("Price"));
+  
+  	printf("\n\n");
+  }
+  ```
 
-/* 当有多个相同名字的节点时，可以使用循环进行读取解析 */
-// 函数FirstChildElement()	:	找到指定名字的元素
-// 函数NextSiblingElement	:	在同一级元素中查找下一个指定名字的元素
-TiXmlElement* pItem = Library->FirstChildElement("Book1");
-if (pItem) {
-	for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
+5. 解析所有的Book1节点的子节点，获得对应解析的节点后，调用GetText可以获得里面的值；
 
-		// 解析属性
-		printf("ID = %s\n", pItem->Attribute("ID"));
-		printf("Name = %s\n", pItem->Attribute("Name"));
-		printf("Price = %s\n", pItem->Attribute("Price"));
-	
-		printf("\n\n");
-	}
-}
+  ```c++
+  /* 当有多个相同名字的节点时，可以使用循环进行读取解析 */
+  TiXmlElement* pItem = Library->FirstChildElement("Book1");
+  if (pItem) {
+  	for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
+  		// 解析Book1的子节点
+  		TiXmlElement* Description = pItem->FirstChildElement("Description");
+  		printf("Description = %s\n", Description->GetText());
+           TiXmlElement *Page = pItem->FirstChildElement("Page");
+  		printf("Page = %s\n", Page->GetText());
+  		printf("\n\n");
+  }
+  ```
 
-5. 解析所有的Book1节点的子节点
-获得对应解析的节点后，调用GetText可以获得里面的值；
+### 2.解析xml节点值，代码汇总
 
-/* 当有多个相同名字的节点时，可以使用循环进行读取解析 */
-TiXmlElement* pItem = Library->FirstChildElement("Book1");
-if (pItem) {
-	for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
-		// 解析Book1的子节点
-		TiXmlElement* Description = pItem->FirstChildElement("Description");
-		printf("Description = %s\n", Description->GetText());
+```c++
+void parse_XML() 
+{
+    printf("\n----- parse_XML -----\n");
+    //方式一：当读取有问题时，可以使用下面方式二
+    // 定义一个TiXmlDocument类指针
+    TiXmlDocument* tinyXmlDoc = new TiXmlDocument(FILE_NAME);
+    tinyXmlDoc->LoadFile(TIXML_ENCODING_LEGACY);
 
-		TiXmlElement *Page = pItem->FirstChildElement("Page");
-		printf("Page = %s\n", Page->GetText());
-	
-		printf("\n\n");
-	}
-}
+    // 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
+    TiXmlDeclaration* pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
+    if (pDeclar != NULL) {
+        printf("头部信息：version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
+    }
 
-解析控制台输出如下
+    // 得到文件根节点
+    TiXmlElement* Library = new TiXmlElement("Library");
+    if (Library) {
+        Library = tinyXmlDoc->RootElement();
+    }
+    // 解析Book节点
+    TiXmlElement* Book = Library->FirstChildElement("Book");
+    if (Book) {
+        printf("Book = %s\n\n", Book->GetText());
+    }
+    /* 当有多个相同名字的节点时，可以使用循环进行读取解析 */
+    // 函数FirstChildElement()	:	找到指定名字的元素
+    // 函数NextSiblingElement	:	在同一级元素中查找下一个指定名字的元素
+    TiXmlElement* pItem = Library->FirstChildElement("Book1");
+    if (pItem) {
+        for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
 
+            // 解析属性
+            printf("ID = %s\n", pItem->Attribute("ID"));
+            printf("Name = %s\n", pItem->Attribute("Name"));
+            printf("Price = %s\n", pItem->Attribute("Price"));
 
-6. 解析xml节点值，代码汇总
-	void parse_XML() {
-	printf("\n----- parse_XML -----\n");
+            // 解析Book1的子节点
+            TiXmlElement* Description = pItem->FirstChildElement("Description");
+            printf("Description = %s\n", Description->GetText());
 
-/* 方式一：当读取有问题时，可以使用下面方式二
-
-	// 定义一个TiXmlDocument类指针
-	TiXmlDocument* tinyXmlDoc = new TiXmlDocument;
-	
-	// 读取文件中的xml
-	if (!tinyXmlDoc->LoadFile(FILE_NAME)) {
-		// 读取失败，打印失败原因
-		printf("Could not load example xml file %s. Error='%s'\n", FILE_NAME, tinyXmlDoc->ErrorDesc());
-		return ;
-	}
-*/
-
-	// 定义一个TiXmlDocument类指针
-	TiXmlDocument* tinyXmlDoc = new TiXmlDocument(FILE_NAME);
-	tinyXmlDoc->LoadFile(TIXML_ENCODING_LEGACY);
-	
-	// 读取文档声明信息(也就是xml的头部信息：<?xml version="1.0" encoding="utf-8" ?>)
-	TiXmlDeclaration* pDeclar = tinyXmlDoc->FirstChild()->ToDeclaration();
-	if (pDeclar != NULL) {
-		printf("头部信息：version is %s , encoding is %s\n", pDeclar->Version(), pDeclar->Encoding());
-	}
-	
-	// 得到文件根节点
-	TiXmlElement* Library = new TiXmlElement("Library");
-	if (Library) {
-		Library = tinyXmlDoc->RootElement();
-	}
-
-
-	// 解析Book节点
-	TiXmlElement* Book = Library->FirstChildElement("Book");
-	if (Book) {
-		printf("Book = %s\n\n", Book->GetText());
-	}
-
-
-
-	/* 当有多个相同名字的节点时，可以使用循环进行读取解析 */
-	// 函数FirstChildElement()	:	找到指定名字的元素
-	// 函数NextSiblingElement	:	在同一级元素中查找下一个指定名字的元素
-	TiXmlElement* pItem = Library->FirstChildElement("Book1");
-	if (pItem) {
-		for (; pItem != NULL; pItem = pItem->NextSiblingElement("Book1")) {
-	
-			// 解析属性
-			printf("ID = %s\n", pItem->Attribute("ID"));
-			printf("Name = %s\n", pItem->Attribute("Name"));
-			printf("Price = %s\n", pItem->Attribute("Price"));
-	
-			// 解析Book1的子节点
-			TiXmlElement* Description = pItem->FirstChildElement("Description");
-			printf("Description = %s\n", Description->GetText());
-	
-			TiXmlElement *Page = pItem->FirstChildElement("Page");
-			printf("Page = %s\n", Page->GetText());
-	
-			printf("\n\n");
-		}
-	}
-
-七、总结
-到此，使用tinyxml操作xml文件的教程已经完毕了，相信学到这里的童鞋们应该会如何使用了，那快做项目去吧！
-
-代码中使用了很多指针，但是都没有进行释放，为什么呢？
-我在网上找过了，网上都说，类结束后会自动释放，不知真假！
-
+            TiXmlElement *Page = pItem->FirstChildElement("Page");
+            printf("Page = %s\n", Page->GetText());
+            printf("\n\n");
+        }
+    }
+```

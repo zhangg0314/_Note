@@ -827,60 +827,7 @@ while(没有资源){//防止惊群效应带来的问题
 //没资源的时候，wait即使不会阻塞线程，但while循环没跳出，也相当于在一直等待
 ```
 
-# 		17.信号量
-
-## 17.1.概念
-
-单个（互斥），多个（同步）
-
-信号灯==信号量(semaphore),信号量代表某一类资源，其值表示系统中该资源的数量，信号量是一个受保护的变量，只能通过三种操作来访问即初始化，P操作，V操作，主要用于进程或者线程间的同步.
-
-## 17.3.信号量的种类
-
-- posix 有名信号灯 //**sem_t* sem_r//初始声明一个指针**	
-
-- posix 无名信号灯（linux只支持**线程，不是进程**同步）//**sem_t sem_r//初始声明一个变量**
-
-- system V 信号灯
-
-## 17.4.信号量三种操作
-
-1. 初始化
-   **posix有名初始化**：sem_open(),sem_close();sem_unlik()
-
-   ```c
-   sem_t *sem_open(const char* name,int oflag,mode_t mode,unsigned int value);
-   	//name：信号文件名，通过文件名来让两个程序虽然各自定义了锁，但文件名相同则各自定义的锁也就一样，创建的文件文件放在/dev/shm目录。
-   	//oflag：打开方式常用O_CREAT
-   	//mode：文件权限，常用0666
-   	//value：信号量初始值
-   注意：
-       第一次open创建文件，并赋初值，若退出程序，再次运行程序，再次open，，由于文件已经存在则所有信号量值不管怎么设置都默认为0,解决办法就是程序退出时应该删除信号量sem_unlink();
-   int sem_close(sem_t *sem)//关闭
-   int sem_unlink(const char* name)//删除
-   ```
-
-   posxi无名初始化: sem_init(),sem_destory();
-
-   ```c
-   int sem_init(sem_t *sem,int pshared,unsigned int value);
-   		//pshared:表示进程或者线程间是否共享该信号量，一般为0不共享，即由初始化这个信号量的进程使用。
-   		//sem是指针，但是是要指向了某一块地址的指针，故应该传&a.
-   ```
-
-2. P操作（申请资源），有名无名都一样
-
-   ```c
-   int sem_wait(sem_t *sem)//P操作
-   ```
-
-3. V操作（释放资源），有名无名都一样
-
-   ```c
-   int sem_post(sem_t *sem)//V操作
-   ```
-
-# 18.线程池
+# 线程池
 
 ## 18.1.使用线程池的必要性
 
@@ -1071,73 +1018,88 @@ ipcrm [option] <shmid>
 4. **数据完整性**
    当数据写入大小小于4k（一块），要么一个不写，要么一次性写入，可以看作写入是原子操作不能写到一半被打断。
 
+------
+
 # 				共享内存
 
-## 3.1.内存映射概念
+## 1.基本概念
 
-`mmap`函数来把磁盘上的文件内存映射到进程的虚拟空间（位于内核中）中，进程访问文件直接访问内存，不需要进程自身调用read，write等系统调用来完成I/O操作，从而大大提高效率。
+在 Linux 系统中，共享内存是一种**高效的进程间通信（`IPC`）机制**，允许多个进程直接访问同一块物理内存区域，从而实现数据的快速交换。相比管道、消息队列等需要通过内核中转的通信方式，共享内存避免了数据在用户空间与内核空间之间的拷贝，因此是性能最优的` IPC `方式之一。
 
-**由通信进程自己负责实现互斥，可以调用内核提供的PV操作。**
+对应临界资源的访问，由通信进程自己负责实现互斥，可以调用内核提供的`PV`操作。
 
-## 3.2.内存映射接口
+## 2.内存映射
+
+### 1.基本原理
+
+进程在运行时，每个进程都有独立的虚拟地址空间，通过页表映射到物理内存。共享内存的核心思想是：**让多个进程将同一块物理内存区域映射到各自的虚拟地址空间中**。
+
+- 当进程 A 向自己虚拟地址空间中的共享内存区域写入数据时，进程 B 通过自己虚拟地址空间中的对应区域可以直接读取到该数据，无需任何数据拷贝。
+- 这种 “直接访问” 特性使得共享内存的通信效率远高于其他` IPC `机制（如管道需要 2 次拷贝：用户→内核→用户）。
+
+### 2.接口函数
+
+`mmap`函数就是把磁盘上的文件内存映射到进程的虚拟空间（位于内核中）中，进程访问文件直接访问内存，不需要进程自身调用read，write等系统调用来完成I/O操作，从而大大提高效率。
 
 ```c
+//创建共享内存映射
 void *mmap(void *addr，size_t length,int prot,int flags,int fd,off_t offset)
-    //功能:创建共享内存映射
     //函数返回值：成功返回映射区首地址，失败返回((void*)-1) MAP_FALIED,出错概率高一定要多检查返回值。
     //参数说明：
-    	addr：要映射的进程的内存首地址，一般为NULL，让操作系统自动选择合适的内存首地址
-    	length:必须>0，映射内存空间的字节数大小
+    	//addr:要映射的进程的内存首地址，一般为NULL，让操作系统自动选择合适的内存首地址
+    	//length:必须>0，映射内存空间的字节数大小
             //指定0，报非法参数错误
-            //length = lseek(fd,0,SEEK_END)
-            0-end的偏移量正好是文件大小
-        prot：指定共享内存的访问权限
-            	PROT_READ可读
-            	PROT_WRITE可写
-            	PROT_EXEC可执行
-            	PROT_NONE不可访问
-            	//映射区权限<=文件打开权限
-            	//映射可读可写。文件打开权限必须大于可读可写
-        flags:共享内存属性
+            //length = lseek(fd,0,SEEK_END),0-end的偏移量正好是文件大小
+        //prot：指定共享内存的访问权限
+            	//PROT_READ可读
+            	//PROT_WRITE可写
+            	//PROT_EXEC可执行
+            	//PROT_NONE不可访问
+            	//映射区权限<=文件打开权限,映射可读可写。文件打开权限必须不小于可读可写
+        //flags:共享内存属性
              	MAP_SHARED共享的
              	MAP_PRIVATE私有的
-            	//私有时，即使写也不会写到磁盘而是内存中，自己玩，不会写到磁盘中，故文件打开只需读权限即可，不一定用于进程间通信，而是频繁访问文件，映射该文件来提高效率。
+            	//私有时，即使写也不会写到磁盘而是写到内存中，自己玩，不会写到磁盘中，故文件打开只需读权限即可，不一定用于进程间通信，而是频繁访问文件，映射该文件来提高效率。
             	MAP_ANONYMOUS匿名映射//用于血缘关系的进程间通信
-        fd：要映射的文件句柄，如果匿名写-1
+        //fd：要映射的文件句柄，如果匿名写-1
             //被映射的文件大写必须>0，否则会报总线错误
-            //当写入数据>文件大小，只写文件大小，剩下的丢失
-        offset：表示从文件的哪个位置开始映射//一般为0，从文件头部开始映射。
+            //当写入数据>文件大小，只写入文件大小的量，剩下的丢失
+       // offset：表示从文件的哪个位置开始映射//一般为0，从文件头部开始映射。
             
- int munmap(void *addr,size_t length);
-		//释放内存映射
+//释放内存映射
+int munmap(void *addr,size_t length);
 ```
 
-## 3.3.内存映射注意事项
+### 3.注意事项
 
-1. 创建映射区过程中，隐含着一次对文件的读操作，将文件内存读到映射区
-2. MAP_PRIVATE私有时，即使写也不会写到磁盘文件而是内存中，自己玩，不会写到磁盘文件中，故文件打开只需读权限也可以往内存中写。
-   MAP_SHARED共享时，映射区权限 <= 文件打开权限。
+1. 创建映射区过程中，隐含着一次对文件的读操作，将文件内存读到映射区。
+2. MAP_PRIVATE私有时，即使写也不会写到磁盘文件而是内存中，自己玩，不会写到磁盘文件中，故文件打开只需读权限也可以往内存中写。而MAP_SHARED共享时，映射区权限 <= 文件打开权限。
 3. 内存映射与文件关闭无关，当映射内存建立成功时，关闭文件不会影响映射内存，把文件close了，照样可以通过映射区更改文件。
 
-4. 被映射的文件原本自身的大小必须>0，否则会报总线错误。length也必须大于0，否则报非法参数错误。offset偏移量必须为0或者4k（页大小）的整数倍，否则报非法参数错误。
-5. 映射内存大小可以大于或者小于文件大小；系统最终分配的可以访问的映射空间为4k的整数倍，具体要看文件大小，文件大小小于4k，分配4k，文件大小大于4k小于8k，分配8k，当访问的地址超出文件大小，虽然修改了内容，但也仅仅是对内存的修改，并不修改磁盘文件的内容。
+4. 被映射的文件原本自身的大小必须>0，否则会报总线错误。length也必须大于0，否则报非法参数错误。offset偏移量必须为0或者`4k`（页大小）的整数倍，否则报非法参数错误。
+5. 映射内存大小可以大于或者小于文件大小；系统最终分配的可以访问的映射空间为`4k`的整数倍，具体要看文件大小，文件大小小于`4k`，分配`4k`，文件大小大于`4k`小于`8k`，分配`8k`，当访问的地址超出文件大小，虽然修改了内容，但也仅仅是对内存的修改，并不修改磁盘文件的内容。
 
-```txt
-比如：当申请映射的大小>系统实际分配的大小>文件大小
+   ```txt
+   比如：当申请映射的大小>系统实际分配的大小>文件大小
+   
+   37个字节的文件，可以申请3k映射内存，但系统实际分配4K，因此可以访问地址位于3k~4k之间的内存，但只有对0~37的映射内存空间修改才会引起磁盘文件内容的修改。
+   
+   即内存访问只要在系统分配的内存大小范围内均可，但修改文件只能在文件大小内修改才有效。
+   
+   要访问的地址超过系统实际分配的内存大小则报总线错误，超过申请的映射空间大小报段错误。
+   ```
 
-37个字节的文件，可以申请3k映射内存，且可以访问地址位于3k~4k之间的内存，但只有对0~37的映射内存空间修改才会引起磁盘文件内容的修改。即内存访问只要在系统分配的内存大小范围内均可，但修改文件只能在文件大小内修改才有效，超过系统分配的内存大小则报总线错误，超过申请的映射空间大小报段错误。
-```
+**共享内存实现进程通信**利用文件映射的内存来进行通信，即通信中介是映射内存而不是文件，故内存修改有没有造成文件修改并不关心。因此文件大小哪怕为1但只要不为0都可以，因为目的在于用共享内存通信，不是文件。
 
-**共享内存实现进程通信**利用文件映射的内存来进行通信，即通信中介是映射内存而不是文件，故内存修改有没有造成文件修改并不关心。因此文件大小为1不为0都可以，因为目的在于用共享内存通信，不是文件。
+### 4.映射类型
 
-## 3.4.映射类型
+1. 文件映射，需要文件。
 
-1. 文件映射，需要文件
+2. 匿名映射，不需文件，用于血缘关系进程通信。
 
-2. 匿名映射，不需文件，用于血缘关系进程通信
+## 3.实现方式
 
-
-# 4.共享内存（system V IPC）	
+### 1.`system V IPC`	
 
 1. **生成key**
 
@@ -1155,28 +1117,32 @@ void *mmap(void *addr，size_t length,int prot,int flags,int fd,off_t offset)
        //功能：创建一块共享内存
        //返回值：成功返回共享内存id，失败返回EOF
        //参数说明：
-       		key：IPC_PRIVATE或者ftok生产
-       		size：要创建内存的大小
-       		shmflg：IPC_CREAT|0666--没有创建，有则打开
+       		//key：IPC_PRIVATE或者ftok生产
+       		//size：要创建内存的大小
+       		//shmflg：IPC_CREAT|0666--没有创建，有则打开
+   ==============================================================================================================
+   //IPC_EXCL是一个控制标志，用于确保共享内存段的创建具有原子性
+   //若共享内存段已存在：shmget会失败（返回-1），并设置错误码EEXIST。
+   //若共享内存段不存在：shmget会创建它，并返回新的共享内存 ID（shmid）.
+   //IPC_EXCL必须与IPC_CREAT一起使用。若仅指定IPC_EXCL，shmget会直接失败（因为无法获取已存在的内存）。
+       //避免竞态条件：多个进程同时尝试创建同名共享内存时，通过IPC_EXCL可确保只有一个进程成功创建，其他进程会收到明确的 “已存在” 错误，从而避免冲突。
    ```
 
-3. **映射共享内存**，映射后才能访问内存，读完内存后的东西还在内存里，不像管道一样读完就没了;
-
-   映射后的内存地址是应用程序的虚拟地址，并非真正的物理地址，访问映射内存其实也就是访问内核空间。
-   此处映射就是为了把内核空间映射到用户空间中，应用进程才能直接访问。
-
+3. **映射共享内存**
+   映射后才能访问内存，读完内存后的东西还在内存里，不像管道一样读完就没了。映射后的内存地址是应用程序的虚拟地址，并非真正的物理地址，访问映射内存其实也就是访问内核空间。此处映射就是为了把内核空间映射到用户空间中，应用进程才能直接访问。
+   
    ```c
    int shmat(int shmid,const void *shmaddr,int shmflg)
        //功能：映射共享内存
        //返回值：成功返回映射后的地址，失败返回（void*）-1
        //参数说明：
-       		shmid：要映射的共享内存id
-       		shmaddr：映射后的地址，NULL表示由系统自动分配地址
-       		shmflg：
+       		//shmid：要映射的共享内存id
+       		//shmaddr：映射后的地址，NULL表示由系统自动分配地址
+       		//shmflg：
        				0表示可读写
        				SHM_RDONLY表示只读
    ```
-
+   
 4. **共享内存撤销映射，撤销的是映射关系不是释放内存**
 
    ```c
@@ -1203,7 +1169,55 @@ void *mmap(void *addr，size_t length,int prot,int flags,int fd,off_t offset)
    shmctl(shmid,IPC_RMID,NULL)
        //删除共享内存，队列中的数据也自动删除
    ```
+   
 
+### 2.`POSIX `共享内存
+
+```c
+//创建或打开共享内存对象（类似文件操作）。
+int shm_open(const char *name, int oflag, mode_t mode);
+//参数：
+	name：共享内存名称（必须以/开头，如/my_shm）；
+	oflag：打开方式（如O_CREAT | O_RDWR表示创建并读写）；
+	mode：权限（如0666）；
+//返回值：文件描述符（类似 open ()）。
+
+//设置共享内存的大小,f-file truncate-截断，ftruncate文件截断
+int ftruncate(int fd, off_t length);
+//ftruncate() 是原子操作，同一文件的多个 ftruncate() 调用不会导致数据混乱，但可能覆盖彼此的结果。
+//作用：通过shm_open返回的文件描述符，设置共享内存的大小（必须执行，否则大小为 0）。
+
+//将共享内存映射到进程虚拟地址空间。
+void *mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset);
+//参数：
+  prot：内存保护（PROT_READ | PROT_WRITE表示读写）；
+  flags：MAP_SHARED表示修改对其他进程可见（核心标志）；
+//返回值：映射后的虚拟地址。
+
+//解除映射。
+int munmap(void *addr, size_t length);
+
+//作用：参数为mmap返回的地址和大小，解除映射。
+
+//删除共享内存对象。
+int shm_unlink(const char *name);
+//作用：删除共享内存的名称，当所有进程解除映射后，内存被释放。
+```
+
+### 3.共享内存的优缺点
+
+#### 优点：
+
+- **高效性**：无需数据拷贝，直接访问物理内存，是性能最高的 IPC 机制。
+- **适合大数据量**：对高频、大容量的数据交换（如视频流、数据库缓存）非常友好。
+
+#### 缺点：
+
+- **无同步机制**：多个进程同时读写时可能导致数据混乱（竞态条件），需配合信号量、互斥锁等同步工具。
+- **资源管理复杂**：System V 共享内存若未显式删除，会一直占用内核资源，可能导致内存泄漏。
+- **大小限制**：系统对共享内存大小有上限（如`/proc/sys/kernel/shmmax`限制 System V 单段最大大小）。
+
+------
 
 # 信号机制
 
@@ -1637,75 +1651,181 @@ int msgctl(int msgid,int cmd,struct msgid_ds *buf)
     		buf：保持或者设置消息队列属性的地址
 ```
 
-# 7.信号灯(system V IPC)
+# 信号量(灯)
 
-1. 申请key
+## 1.基本概念
 
-2. 打开/创建信号灯 
+在 Linux 系统里，信号量（Semaphore）是进程间通信（`IPC`）的重要手段，主要用于实现资源的同步与互斥访问。信号量本质上是一个计数器，它的作用是控制多个进程或线程对共享资源的访问。信号灯==信号量(semaphore),信号量代表某一类资源，其值表示系统中该资源的数量，信号量是一个受保护的变量，只能通过三种操作来访问即初始化，P操作，V操作，主要用于进程或者线程间的同步。它主要有以下两种类型：
 
-   ```c
-   int semget(key_t key,int nsems,int semflg);
-   	//功能：创建/打开信号灯
-       //参数：
-   		   key:....
-               nsems:信号灯集包含的信号的个数
-               semflg:访问权限，通常为IPC_CREAT |0666
-       //返回值，成功semid，失败-1
-   ```
+- **二值信号量**：其值只有 0 和 1，功能类似于互斥锁，用于实现对资源的互斥访问。
+- **计数信号量**：它的值可以是任意的非负整数，能够允许多个进程或线程同时访问共享资源。
 
-3. 信号灯的控制（初始化/删除）
+## 2.信号量的种类
 
-   ```c
-   int semctl(int semid,int semnum,[int cmd,union semun*])
-       //semid:信号灯集ID
-       //semnum：要操作的集合中的信号的编号，从0开始
-       //当cmd为SETVAL
-       	GETVAL：获取信号灯的值，返回值是获得值
-       	SETVAL：设置信号灯的值，需要用到第四个参数unino结构体
-       	IPC_RMID：从系统中删除信号灯集
-       //返回值：成功0，失败-1
+- `posix`有名信号灯（进程间）
+
+- `posix `无名信号灯（线程间）
+
+- `system V` 信号灯（进程间）
+
+## 3.实现方式
+
+### 1.`POSIX `线程信号量（Thread Semaphores）
+
+这是基于线程的轻量级实现，适用于同一进程内的线程同步，用的是无名信号灯，使用步骤如下：
+
+```c
+int sem_init(sem_t *sem,int pshared,unsigned int value);
+		//pshared:表示进程或者线程间是否共享该信号量，一般为0不共享，即由初始化这个信号量的进程使用。
+		//sem是指针，但是是要指向了某一块地址的指针，故应该传&a.
+===============================================================================================================
+
+#include <semaphore.h>
+// 创建并初始化信号量
+sem_t semaphore;
+sem_init(&semaphore, 0, 1); 
+
+// 等待信号量（P操作）
+sem_wait(&semaphore);
+
+// 释放信号量（V操作）
+sem_post(&semaphore);
+
+// 销毁信号量
+sem_destroy(&semaphore);
+```
+
+### 2.`POSIX` 命名信号量（Named Semaphores）
+
+这种信号量以文件形式存在，主要用于不同进程间的同步。
+
+> [!CAUTION]
+>
+> 第一次open创建文件，并赋初值，若退出程序，再次运行程序，再次open，由于文件已经存在则所有信号量值不管怎么设置都默认为0，解决办法就是程序退出时应该删除信号量`sem_unlink()`
+
+```c
+sem_t *sem_open(const char* name,int oflag,mode_t mode,unsigned int value);
+	//name：信号文件名，通过文件名来让两个程序虽然各自定义了锁，但文件名相同则各自定义的锁也就一样，创建的文件文件放在/dev/shm目录。
+	//oflag：打开方式常用O_CREAT
+	//mode：文件权限，常用0666
+	//value：信号量初始值
+int sem_close(sem_t *sem)//关闭
+int sem_unlink(const char* name)// 关闭当前引用,当所有进程都关闭该信号量后，内核对象才会真正销毁
+===================================================================================================================
+
+    
+#include <fcntl.h>
+#include <semaphore.h>
+
+// 创建或打开命名信号量
+sem_t *sem = sem_open("/my_semaphore", O_CREAT, 0644, 1);
+
+// 使用方式与线程信号量相同
+sem_wait(sem);
+sem_post(sem);
+
+// 关闭并删除信号量
+sem_close(sem);
+sem_unlink("/my_semaphore");
+```
+
+### 3.`System V `信号量
+
+这是一种比较传统的 `IPC `机制，支持信号量集，使用起来相对复杂。
+
+```c
+//创建/打开信号灯
+int semget(key_t key,int nsems,int semflg);
+//参数：key:....
+//nsems:信号灯集包含的信号的个数
+//semflg:访问权限，通常为IPC_CREAT |0666
+//返回值，成功semid，失败-1
+
+int semctl(int semid,int semnum,int cmd,[union semun*])
+    //semid:信号灯集ID
+    //semnum：要操作的集合中的信号的编号，从0开始
+    //当cmd为
+    //GETVAL：获取信号灯的值，返回值是获得值
+    //SETVAL：设置信号灯的值，需要用到第四个参数unino结构体
+    //IPC_RMID：从系统中删除信号灯集
+    //返回值：成功0，失败-1
+
     //读和写：信号灯个数就为2
-   #define SEM_READ 0
-   #define SEM_WRITE 1
-   union semun mysem{
-       //共用体
-       int val；//SETVAL，只用第一个变量
-        ... ；
-         ... ;
-   };
-   
-   //信号灯初始化
-   semctl(semid,0,SETVAL,semun)
-       
-    //信号灯删除
-   semctl(semid,0,IPC_RMID)
-   ```
+    #define SEM_READ 0
+    #define SEM_WRITE 1
 
-4. 信号灯的操作
 
-   ```c
-   struct sembuf{
+//信号灯初始化赋值             
+union semun
+{
+    int val;               /* value for SETVAL */
+    struct semid_ds *buf;  /* buffer for IPC_STAT, IPC_SET */
+    unsigned short *array; /* array for GETALL, SETALL */
+    /* Linux specific part: */
+    struct seminfo *__buf; /* buffer for IPC_INFO */
+};
+semctl(semid,0,SETVAL,semun)
+
+//信号灯删除
+semctl(semid,0,IPC_RMID)
+
+struct sembuf{
        short sem_num//信号灯编号
        short sem_op// 1.V
-           		  -1.P
+            	   //-1.P
        short sem_flg://0阻塞，IPC_NOWAIT,SEM_UNDO
-   }
-   void sem_p(int semid,int semindex){
-       struct sembuf sbuf;
-       sbuf.sem_num = semindex;
-       sbuf.sem_op = -1;
-       sbuf.sem_flg = 0;
-       semop(semid,&sembuf,1);
-   }
-   void sem_v(){
-       struct sembuf sbuf;
-       sbuf.sem_num = semindex;
-       sbuf.sem_op = 1;
-       sbuf.sem_flg = 0;
-       int nops = 1;//要操作的信号灯个数
-       semop(semid,&sembuf,nops);
-   }
-   ```
+}
+/* Flags for `semop'.  */
+#define SEM_UNDO	0x1000		/* undo the operation on exit */
+void sem_p(int semid,int semindex){
+    struct sembuf sbuf;
+    sbuf.sem_num = semindex;
+    sbuf.sem_op = -1;
+    sbuf.sem_flg = 0;
+    semop(semid,&sembuf,1);
+}
+void sem_v(){
+    struct sembuf sbuf;
+    sbuf.sem_num = semindex;
+    sbuf.sem_op = 1;
+    sbuf.sem_flg = 0;
+    int nops = 1;//要操作的信号灯个数
+    semop(semid,&sembuf,nops);
+}
+```
+
+## 4.结构体扩展
+
+ **`struct semid_ds *buf; `**
+
+```c
+/* Data structure describing a set of semaphores.  */
+struct semid_ds
+{
+  struct ipc_perm sem_perm;		//描述信号量集的权限信息,包含：uid 和 gid：所有者和组的 ID。
+													   //mode：访问权限位（如 0666）。
+													  //key：创建信号量集时使用的键值（通过 ftok() 生成）。
+                                                            //seq：序列号，用于区分具有相同键的不同实例。
+  __time_t sem_otime;			//最后一次调用 semop()（执行 P/V 操作）的时间戳,若 sem_otime 为 0，表示信号量集刚创建但尚未被任何进程操作过。
+  __syscall_ulong_t __glibc_reserved1;
+  __time_t sem_ctime;	//最后一次通过 semctl() 修改信号量集的时间戳（如调用 SETVAL 初始化值）
+  __syscall_ulong_t __glibc_reserved2;
+  __syscall_ulong_t sem_nsems;		/* number of semaphores in set */
+  __syscall_ulong_t __glibc_reserved3;
+  __syscall_ulong_t __glibc_reserved4;
+};
+```
+
+## 5.典型应用场景
+
+- **互斥访问**：借助二值信号量来保证同一时间只有一个进程或线程能够访问共享资源。
+- **资源计数**：利用计数信号量对可用资源的数量进行管理，比如数据库连接池。
+- **生产者 - 消费者模型**：可以使用多个信号量分别对缓冲区的空槽和数据项进行计数。
+
+## 6.与互斥锁的差异
+
+- **信号量**：支持多个资源实例，适用于进程间同步，并且可以实现复杂的同步模式。
+- **互斥锁**：只允许一个持有者，主要用于线程间同步，而且通常具有更高的性能。
 
 # 8.套接字
 
