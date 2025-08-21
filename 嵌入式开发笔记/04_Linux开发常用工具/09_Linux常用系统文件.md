@@ -44,7 +44,136 @@
 - **空设备文件**
   在Linux系统中，空设备文件`/dev/null`是一个特殊的文件，用于将数据彻底丢弃。它是一个特殊的文件设备，可以通过标准输入和标准输出访问。读取/dev/null将会立即返回EOF文件结束符，而向它写入任何数据将会直接被忽略掉，从而丢弃数据。Linux中，默认命令、脚本等的标准正常输出和标准错误输出默认是输出到标准终端上，即：屏幕。如果不想在标准终端上显示，可把结果输出到/dev/null中。
 
-# `crontable`
+# 服务自启动
+
+## 1.`systemd` 服务
+
+`systemd`是 Linux 系统中广泛使用的系统和服务管理器，它取代了传统的`SysVinit`，负责系统启动、服务管理、进程监控等核心功能。其设计目标是提高系统启动速度、优化服务依赖管理，并提供更丰富的系统管理能力。适合长期稳定运行的命令，通过系统服务管理器 `systemd` 管理，支持开机自启、日志保存、状态监控等。
+
+## 2.核心功能与特点
+
+1. **并行启动服务**
+   传统 `SysVinit` 按顺序启动服务，而` systemd` 能并行启动无依赖关系的服务，大幅缩短系统启动时间。
+2. **统一的服务管理接口**
+   通过 `systemctl` 命令统一管理系统服务（启动、停止、重启、查看状态等），替代了传统的 `/etc/init.d/` 脚本。
+3. **基于单元（Unit）的管理**
+   `systemd` 用 “单元” 描述系统资源，包括服务（.service）、挂载点（.mount）、设备（.device）等，每种单元有特定的配置文件（通常位于 `/usr/lib/systemd/system/` 或 `/etc/systemd/system/`）。
+4. **自动重启与监控**
+   可配置服务崩溃时自动重启，通过 `systemctl status` 实时查看服务状态和日志。
+5. **依赖管理**
+   单元配置中可明确依赖关系（如 `After=network.target` 表示服务在网络启动后运行），<u>避免手动处理启动顺序</u>。
+
+## 3.常用 `systemctl` 命令
+
+| 命令                                       | 功能描述                                        |
+| ------------------------------------------ | ----------------------------------------------- |
+| `systemctl start <服务名>`                 | 启动指定服务                                    |
+| `systemctl stop <服务名>`                  | 停止指定服务                                    |
+| `systemctl restart <服务名>`               | 重启指定服务                                    |
+| `systemctl enable <服务名>`                | 设置服务开机自启动                              |
+| `systemctl disable <服务名>`               | 取消服务开机自启动                              |
+| `systemctl status <服务名>`                | 查看服务状态（运行 / 停止等）                   |
+| `systemctl list-unit-files --type=service` | 列出所有服务及自启动状态                        |
+| `systemctl daemon-reload`                  | 重新加载 `systemd` 配置（修改服务文件后需执行） |
+
+## 4.服务配置文件
+
+在 Linux 系统中，`.server` 文件通常用于定义 **`systemd` 服务单元**，是管理系统服务（如后台进程、守护程序）的配置文件。
+
+### 1.文件存储路径
+
+文件名通常为 `服务名.service`（例如 `nginx.service`、`myapp.service`），存放路径一般为：
+
+- 系统级服务：`/usr/lib/systemd/system/` 或 `/etc/systemd/system/`
+- 用户级服务：`~/.config/systemd/user/`
+
+### 2.基本结构
+
+```ini
+[Unit]          # 服务的元数据（描述、依赖关系等）
+[Service]       # 服务的核心配置（启动命令、运行方式等）
+[Install]       # 服务的安装配置（开机启动相关）
+```
+
+举例：
+
+```ini
+[Unit]# 服务的元数据（描述、依赖关系等）
+Description=My Application Service  # 服务描述
+After=network.target                # 依赖网络服务启动后运行
+
+[Service]# 服务的核心配置（启动命令、运行方式等
+Type=simple                         # 服务类型（simple/forking等）
+ExecStart=/usr/bin/myapp            # 启动命令
+Restart=on-failure                  # 失败时自动重启
+User=nobody                         # 运行用户
+
+[Install]# 服务的安装配置（开机启动相关）
+WantedBy=multi-user.target          # 开机自启动时的目标级别
+```
+
+将文件放入 `/etc/systemd/system/` 后，执行 `systemctl daemon-reload` 即可通过 `systemctl` 管理该服务。
+
+## 5.日志管理
+
+使用 `journalctl` 查看系统日志：
+
+```bash
+journalctl -u xxx.service -f#动态打印日志
+```
+
+## 6.开机监控网口抓包流程
+
+### 1.创建服务文件
+
+创建一个系统服务配置文件，用于定义开机执行的命令和输出保存路径：
+
+```bash
+sudo vi /etc/systemd/system/tshark-capture.service
+#粘贴以下内容
+
+Description=Auto-run tshark capture on startup (Ubuntu)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/bin/bash -c 'stdbuf -oL /usr/bin/tshark -i eth0 -Y "(tcp.dstport == 9995 and ip.dst == 192.168.8.164) or (tcp.srcport == 9995 and ip.src == 192.168.8.164) and tcp.len > 5 " -T fields  -e frame.time  -e data -E separator=, -E occurrence=f >> /var/log/tshark_capture.log 2>&1'
+Restart=always
+User=root
+Group=root
+KillMode=control-group
+
+[Install]
+WantedBy=multi-user.target
+```
+
+核心参数说明：
+
+- `>> /var/log/tshark_capture.log 2>&1`：将输出**追加**到日志文件（避免覆盖历史记录），同时记录错误信息。
+- `Restart=always`：确保抓包命令持续运行（若意外中断会自动重启）。
+- `User=root`：`tshark` 抓包需要 root 权限，必须指定 root 用户。
+
+### 2.设置服务并启用开机自启
+
+```bash
+# 设置服务文件权限
+sudo chmod 644 /etc/systemd/system/tshark-capture.service
+
+# 重新加载systemd配置
+sudo systemctl daemon-reload
+
+# 启用开机自启
+sudo systemctl enable tshark-capture.service
+
+#启动服务
+sudo systemctl start tshark-capture.service
+
+# 查看服务状态（确认是否运行中）
+sudo systemctl status tshark-capture.service
+```
+
+# 定时任务
 
 ## 1. 基本概念
 

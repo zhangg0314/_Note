@@ -1,12 +1,12 @@
-[如何为Debian/Ubuntu制作deb安装包-谢先斌的博客](https://www.xiexianbin.cn/linux/ubuntu/dpkg-build/index.html#初始化-1)
 
-https://www.debian.org/doc/manuals/maint-guide/
 
-# dpkg-buildpackage介绍
+# ——概念功能——
+
+# 1.基本介绍
 
 `dpkg-buildpackage` 是 `Debian/Ubuntu` 系统中用于构建软件包的核心工具，它会调用一系列底层工具（如 `dpkg-deb`、`dpkg-gencontrol`）来自动生成 `.deb` 软件包( 相当于 Windows 中的 **`.msi` 或 `.exe` 安装文件**)。以下是其详细介绍：
 
-## 1.核心功能
+# 2.核心功能
 
 1. **自动化构建流程**
    从源代码生成完整的 `.deb` 包，包括编译、打包、生成控制文件等步骤。
@@ -17,10 +17,10 @@ https://www.debian.org/doc/manuals/maint-guide/
 4. **依赖检查**
    自动检查并处理构建依赖（如所需的开发库）。
 
-## 2.基本工作流程
+# 3.基本工作流程
 
 1. **准备源代码**
-   项目需包含 `debian/` 目录，其中包含控制文件（如 `control`、`rules`、`changelog` 等），因此需要在当前目录下建立`debian/`目录。
+   项目根目录需包含 `debian/` 目录，其中包含控制文件（如 `control`、`rules`、`changelog` 等），因此需要在当前目录下建立`debian/`目录。
 
 2. **修改控制文件**
 
@@ -47,7 +47,7 @@ https://www.debian.org/doc/manuals/maint-guide/
    - `.changes`：包变更记录
    - `.orig.tar.xz`：原始源代码压缩包（若指定 `--createorig`）
 
-## 3.关键配置文件
+# 4.关键配置文件
 
 `dpkg-buildpackage` 依赖 `debian/` 目录下的多个配置文件：
 
@@ -95,7 +95,7 @@ https://www.debian.org/doc/manuals/maint-guide/
    bin/myproject usr/bin/
    ```
 
-## 4.常用命令示例
+# 5.常用命令示例
 
 1. **构建二进制包（不签名）**
 
@@ -127,7 +127,7 @@ https://www.debian.org/doc/manuals/maint-guide/
    dpkg-buildpackage -us -uc -b --changes-option=-q
    ```
 
-## 5.高级功能
+# 6.高级功能
 
 1. **并行构建**
    使用 `-j` 选项指定并行编译的线程数：
@@ -150,10 +150,10 @@ https://www.debian.org/doc/manuals/maint-guide/
    pbuilder build ../myproject_1.0.dsc
    ```
 
-## 6.相关工具链
+# 7.相关工具链
 
 1. **`debhelper`**
-   提供 `dh_*` 系列命令（如 `dh_auto_configure`、`dh_install`），简化 `rules` 文件编写。
+   提供 `dh_*` 系列命令（如`dh_make` `dh_auto_configure`、`dh_install`），简化 `rules` 文件编写。
 2. **`dpkg-deb`**
    直接操作 `.deb` 包的工具（创建、提取、查看）。
 3. **`debuild`**
@@ -161,28 +161,26 @@ https://www.debian.org/doc/manuals/maint-guide/
 4. **`lintian`**
    检查包是否符合 Debian 政策，发现潜在问题。
 
-## 7.常见问题及解决
+# 8.原生包和非原生包
 
-1. **依赖错误**
-   确保 `debian/control` 中的 `Build-Depends` 包含所有必要的开发包。
-2. **缺少 orig.tar.xz**
-   使用 `--createorig` 自动创建，或手动提供上游源代码包。
-3. **架构不匹配**
-   使用 `-a<架构>` 明确指定目标架构，或在 `control` 中设置 `Architecture: all`。
-4. **签名失败**
-   检查 GPG 密钥是否正确配置，或使用 `-us -uc` 跳过签名。
+- **原生包**：就像 “本地特产”。
+  比如某个小吃（比如北京的豆汁儿），从原料到制作方法，都是在本地（Debian 系统）原创的，只适合在本地环境（Debian/Ubuntu 等基于 Debian 的系统）里 “吃”（安装使用），没有其他 “老家”（其他系统）。
+  对应的软件包：比如 Debian 系统自己开发的一些工具（如`dpkg`本身），它们的源代码和打包方式都是 Debian 独有的，只存在于 Debian 的软件仓库里。
+- **非原生包**：就像 “进口商品”。
+  比如国外的零食（比如日本的薯片），它的 “老家”（源代码）在国外（比如最初是为 Red Hat 系统开发的，或者是跨平台的通用软件），后来被 “进口” 到本地（Debian 系统），并按照本地的 “包装标准”（Debian 的打包规则）重新包装，才能在本地 “销售”（安装）。
+  对应的软件包：比如`Firefox`浏览器、`Python`解释器，它们的源代码是通用的，最初可能不是为 Debian 开发的，但被 Debian 开发者重新打包成符合 Debian 格式的包，放进了 Debian 的仓库里。
 
-通过 `dpkg-buildpackage`，开发者可以高效地将软件打包为 `.deb` 格式，便于在 Debian/Ubuntu 系统上分发和安装。
+简单说，核心区别就是：**原生包是 Debian “土生土长” 的，非原生包是 “外来户” 被 Debian 重新包装的**。
 
+# ——执行流程——
 
-
-# 安装依赖
+# 1.安装依赖
 
 ```bash
 apt install build-essential binutils lintian debhelper dh-make devscripts
 ```
 
-# 项目目录
+# 2.项目目录
 
 ## 1.目录结构
 
@@ -247,9 +245,7 @@ dh_make -s -y -e your_email@example.com -p myapp_1.0.0
 #-p后面的参数格式是包名_版本号（必须用下划线），例如utils_2.3、tools-extra_0.9.1（包名允许包含 `-`，但版本号中通常不建议)。
 ```
 
-
-
-# 生成`Debian/`目录
+# 3.生成`Debian/`目录
 
 ## 1.命令介绍
 
@@ -336,18 +332,6 @@ dh_make --native -e your.email@example.com
 
 #### 2. **基于上游源码的包**
 
-bash
-
-
-
-
-
-
-
-
-
-
-
 ```bash
 # 假设上游源码在 myproject-1.0/ 目录
 cd myproject-1.0/
@@ -356,41 +340,17 @@ dh_make -s -e your.email@example.com
 
 #### 3. **Python 项目**
 
-bash
-
-
-
-
-
-
-
-
-
-
-
 ```bash
 dh_make --python -e your.email@example.com
 ```
 
 #### 4. **CMake 项目**
 
-bash
-
-
-
-
-
-
-
-
-
-
-
 ```bash
 dh_make --cmake -e your.email@example.com
 ```
 
-### 五、注意事项
+### 5.注意事项
 
 1. **版本一致性**
 
@@ -402,57 +362,20 @@ dh_make --cmake -e your.email@example.com
 
 3. **与 `debhelper` 配合**
 
-   - ```
-     dh_make
-     ```
-
-      
-
-     生成的
-
-      
-
-     ```
-     rules
-     ```
-
-      
-
-     文件依赖
-
-      
-
-     ```
-     debhelper
-     ```
-
-     ，确保系统已安装：
-
-     bash
-
+   - `dh_make生成的`rules`文件依赖
      
-
-     
-
-     
-
-     
-
-     
-
+   - `debhelper`需要确保系统已安装
+  
      ```bash
-     sudo apt install debhelper
+  sudo apt install debhelper
      ```
 
-     
 
-     
+通过 `dh_make`，可以快速搭建 `Debian` 包的基础结构，然后专注于定制特定的打包规则和元数据。这大大降低了手动编写复杂控制文件的门槛。
 
-     
+## 2.命令执行
 
-     ![img](data:image/png;base64,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)
-
-通过 `dh_make`，你可以快速搭建 Debian 包的基础结构，然后专注于定制特定的打包规则和元数据。这大大降低了手动编写复杂控制文件的门槛。
+### 1.正常情况
 
 在**项目根目录**下执行：
 
@@ -472,13 +395,11 @@ Either specify an alternate file to use with -f,
 or add --createorig to create one.
 ```
 
-
-
 ### 3.原始源代码包获取
 
 #### 1.源码格式要求
 
-`Debian`打包工具要求项目存在一个**未修改的原始源代码压缩包**（称为 `orig.tar.xz` 或 `orig.tar.gz`），用于区分上游（upstream）源代码和 Debian 打包的修改（如 `debian/` 目录中的配置）。其命名格式为：
+`Debian`打包工具要求项目存在一个**未修改的原始源代码压缩包**（称为 `orig.tar.xz` 或 `orig.tar.gz`），用于区分上游（upstream）源代码和 `Debian` 打包的修改（如 `debian/` 目录中的配置）。其命名格式为：
 `<package>_<version>.orig.tar.<压缩格式>`
 例如：`myapp_1.0.0.orig.tar.xz`。当运行 `dh_make` 或 `dpkg-buildpackage` 时，工具会自动查找这个文件，若找不到，会提示你提供它（用 `-f`），或自动创建它（用 `--createorig`）。
 
@@ -537,7 +458,7 @@ dh_make -s -y -e your_email@example.com -f ../myapp-1.0.0.tar.gz
 #工具会自动将该文件重命名为 `myapp_1.0.0.orig.tar.gz` 并使用（注意：文件名需符合 `package_version.orig.tar.xxx` 格式）。
 ```
 
-## 4.修改配置
+## 3.修改配置
 
 1. **删除 `.ex` 或 `.EX` 后缀**：
    对需要使用的文件，移除扩展名（如 `init.d.ex` → `init.d`）。
@@ -548,7 +469,7 @@ dh_make -s -y -e your_email@example.com -f ../myapp-1.0.0.tar.gz
 3. **忽略不需要的文件**：
    不需要的文件（如 `menu.ex`）可以直接删除。
 
-## 5.构建包
+## 4.构建包
 
 ### 1. 清理和检查
 
@@ -572,7 +493,7 @@ dpkg-buildpackage -b #这会在父目录生成 `.deb` 文件。
 dpkg-buildpackage -S #这会生成 `.dsc`、`.tar.gz` 和 `.diff.gz` 文件。
 ```
 
-## 6.自动生成的脚本
+## 5.自动生成的脚本
 
 执行 `dh_make` 时会自动生成以下文件：
 
@@ -582,7 +503,7 @@ dpkg-buildpackage -S #这会生成 `.dsc`、`.tar.gz` 和 `.diff.gz` 文件。
 - `debian/rules`（基本规则）
 - `debian/source/format`（包格式声明）
 
-## 7.需要手动修改的文件
+## 6.需要手动修改的文件
 
 1. **`debian/control`**：添加正确的依赖和描述
 2. **`debian/rules`**：定制编译和安装步骤
@@ -590,7 +511,7 @@ dpkg-buildpackage -S #这会生成 `.dsc`、`.tar.gz` 和 `.diff.gz` 文件。
 4. **`debian/copyright`**：添加实际的版权信息
 5. **`debian/install`**：指定文件安装位置
 
-## 8.测试包
+## 7.测试包
 
 ### 1. 安装包
 
@@ -610,7 +531,7 @@ dpkg -L myproject
 sudo dpkg -r myproject
 ```
 
-## 9.高级技巧
+## 8.高级技巧
 
 ### 1. 添加 postinst 脚本
 
@@ -646,7 +567,7 @@ chmod +x debian/postinst
 /etc/myproject.conf
 ```
 
-## 10.常见问题
+## 9.常见问题
 
 1. **依赖错误**
    确保 `control` 文件中的 `Depends` 字段正确
@@ -657,7 +578,7 @@ chmod +x debian/postinst
 
 通过以上步骤，可以为`Debian/Ubuntu` 系统创建完整的 `.deb` 安装包。实际操作中可能需要根据项目特性进行调整。
 
-# dpkg-buildpackage命令
+# 4.`dpkg-buildpackage`命令
 
 ## 1. 签名相关选项
 
@@ -713,4 +634,23 @@ chmod +x debian/postinst
 ```bash
 dpkg-buildpackage -uc -us -rfakeroot -aarmhf -nc --changes-option=-quiet
 ```
+
+# 5.常见问题及解决
+
+1. **依赖错误**
+   确保 `debian/control` 中的 `Build-Depends` 包含所有必要的开发包。
+2. **缺少 orig.tar.xz**
+   使用 `--createorig` 自动创建，或手动提供上游源代码包。
+3. **架构不匹配**
+   使用 `-a<架构>` 明确指定目标架构，或在 `control` 中设置 `Architecture: all`。
+4. **签名失败**
+   检查 GPG 密钥是否正确配置，或使用 `-us -uc` 跳过签名。
+
+通过 `dpkg-buildpackage`，开发者可以高效地将软件打包为 `.deb` 格式，便于在 Debian/Ubuntu 系统上分发和安装。
+
+# 6.参考链接
+
+[如何为Debian/Ubuntu制作deb安装包-谢先斌的博客](https://www.xiexianbin.cn/linux/ubuntu/dpkg-build/index.html#初始化-1)
+
+https://www.debian.org/doc/manuals/maint-guide/
 
