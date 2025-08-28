@@ -179,6 +179,8 @@ $(pastsubst <pattern>,<repalcement>,<text>)
 ```shell
 make #默认访问文件名为makefile的文件
 
+make 变量1=值1 变量2=值2 [目标] #向 Makefile 传递参数（变量）
+
 make -f file#make文件名为file的文件
 
 make -i #忽略所有执行出现的错误导致的停止，即使出错了，也会接着往下执行，不会在出错的地方直接停止了。这很重要，特别是当一个工程要编译几个小时时，编译了好久因为出错停了又得重来。

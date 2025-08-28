@@ -65,11 +65,13 @@ ssh -V
 ### 3.启用ssh服务
 
 ```bash
-sudo systemctl start sshd
-sudo systemctl enable sshd
+sudo systemctl start ssh.service
+sudo systemctl enable ssh.service
 ```
 
 ### 4.配置SSH服务
+
+[SSH远程登陆配置sshd_config文件详解-阿里云开发者社区](https://developer.aliyun.com/article/972993)
 
 ```bash
 vi  /etc/ssh/sshd_config  #打开服务器配置文件,配置配置验证方式是否只能为密码还是密钥

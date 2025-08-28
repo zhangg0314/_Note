@@ -75,6 +75,8 @@
 
 其中最核心的工作就是设备数据的输入和输出，因此计算机外部设备（外设）也被称为IO设备。
 
+------
+
 # 编译内核
 
 ## 1.静态加载法
@@ -187,7 +189,9 @@
 
 5. vim **Makefile**（**自己编写或者公司提供的辅助makefile,位于其他目录**）
 
-   虽然是不同目录，但make原理也同其他位于Linux顶层目录的Makefile同一目录下的模块文件一样，只不过要额外自己编写一个makefile来协助顶层目录的makefile比如告诉Linux内核的顶层Makefile模块源码目录的路径。而第二次执行这个自己编写的协助的makefile时相当于执行模块源码目录下的Makefile本来就要有的内容`obj-m += hello.o`,即与模块源文件在同一目录下的Makefile也要有这一行生成.o的命令。
+   ​	虽然是不同目录，但make原理也同位于Linux顶层目录下的Makefile去make其他目录下的模块文件一样，只不过要额外自己编写一个makefile来协助顶层目录的makefile。比如告诉Linux内核的顶层Makefile模块源码目录的路径。
+
+   ​	而第二次执行这个自己编写的协助的makefile时相当于执行模块源码目录下的Makefile本来就要有的内容`obj-m += hello.o`,即与模块源文件在同一目录下的Makefile也要有这一行生成.o的命令。
 
    ​        此Makefile的编写可以参照Linux源码目录下与各种模块处于同一目录下的Makefile，因为无论模块文件是否与Linux内核源码处于同一目录，其模块源码目录下的`Makefile`都是为了协助Linux顶层目录下的Makefile完成编译生成`.ko`文件的。
 
@@ -247,6 +251,24 @@
   
   #内核随时打印信息，我们可以在串口终端界面随时看到打印信息，不需要dmesg命令查看打印信息
   ```
+
+------
+
+# 配置文件语法
+
+## 1.`Kconfig`
+
+- 图文并茂
+  [把Linux驱动编译到内核的预备知识-Kconfig 文件语法_linux驱动kconfig-CSDN博客](https://blog.csdn.net/huilin9966/article/details/142586656)
+- 只讲语法
+  [【构建】Kconfig入门、常用语法学习笔记 | Jindu-Chen](https://jindu-chen.github.io/2024/01/05/【构建】Kconfig入门、常用语法学习笔记/)
+
+## 2.`Makefile`
+
+- `obj-y` 是一个在内核 Makefile 中常用的变量，用于指定一组默认的目标文件（.o 文件），这些文件将被编译并链接到最终的内核映像或模块中。`+=` 操作符用于追加列表，如果 `obj-y` 已经包含了一些目标文件，`mem.o` 和 `random.o` 将被添加到这个列表的末尾。
+- `obj-$(CONFIG_TTY_PRINTK)` 是一个条件编译指令，它依赖于内核配置选项 `CONFIG_TTY_PRINTK` 的值。`CONFIG_TTY_PRINTK` 是内核配置中的一个选项，通常在内核的 `Kconfig` 文件中定义。
+
+------
 
 # 内核时钟
 
