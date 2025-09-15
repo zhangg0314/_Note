@@ -355,6 +355,8 @@ USB 事务分为3类：
 - 【设备出错】的输出事务处理
   ![img](..\figure\a508ef4e448e33329505355c57021351.png)
 
+# USB标准设备请求
+
 #  USB描述符
 
 ## 1.描述符介绍
@@ -562,6 +564,10 @@ USBFS_CFG.PUO = 1;
 # 参考链接
 
 [USB 设备描述符 - USB中文网](https://www.usbzh.com/article/detail-104.html)
+
+[【USB笔记】 标准设备请求Standard Device Requests_usb standard req-CSDN博客](https://blog.csdn.net/u012028275/article/details/114712631)
+
+[CDC 特定类请求 - USB中文网](https://www.usbzh.com/article/detail-1502.html)
 
 [USB 协议分析（含基本协议和 USB 请求和设备枚举）_usb通讯时的枚举类型-CSDN博客](https://blog.csdn.net/zhoutaopower/article/details/82083043)
 

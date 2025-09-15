@@ -376,12 +376,31 @@ STOP:
 ```asm
 @1.协处理器数据运算指令
 	CDP
+	
 @2.协处理器存储器访问指令
+
 	STC @将协处理器中的数据存到存储器
 	LDC @将存储器中的数据读取到协处理器
+	
 @3.协处理器寄存器传送指令
 	MRC @协处理器的寄存器到ARM的寄存器
-	MCR @ARM的寄存器协到处理器的寄存器
+	
+	MCR @Move to Coprocessor from ARMRegister，ARM的寄存器协到处理器的寄存器
+	MCR{条件} <coproc>，<op 1>，<Rd>，<CRn>，<CRm> {<op 2>}
+	@<coproc>
+		指定协处理器的编号，标准的协处理器的名字为 p0、p1、…、p15。
+	@<opcode_1>
+		指定协处理器执行的操作码，确定哪一个协处理器指令将被执行。
+	@<Rd>
+		确定哪一个 ARM 寄存器的数值将被传送。如果程序计数器（PC）的值被传送，指令的执行结果不可预知。
+	@<CRn>
+		确定包含第一个操作数的协处理器寄存器。
+	@<CRm>
+		确定包含第二个操作数的协处理器寄存器。
+	@<opcode_2>
+		指定协处理器执行的操作码，确定哪一个协处理器指令将被执行。
+	
+	@CRn + opcode_1 + CRm + opcode_2 组成的序号唯一标识协处理器中的某个寄存器
 ```
 
 ## 4.伪指令
@@ -403,15 +422,119 @@ LDR R1,STOP @将STOP代码段的第一条指令的机器码写入R1寄存器，�
 
 ## 5.伪操作
 
+### 1.特性
+
 ```asm
 @伪操作一般以'.'开头
+```
 
+### 2.全局局部属性
+
+```asm
 @1.声明全局标识
-.global symbol 
-	#将一个符号如MAIN,STOP这样的声明为全局
+	.global symbol_name
+	.globl 	symbol_name
+	#将一个如MAIN,STOP这样的符号定义为全局符号，使得链接器能够全局识别它，即一个程序文件中定义的符号能够被所有其他程序文件可见。
+
 @2.声明局部标识
-.local symbol  
-	#将一个符号声明成局部
+	.local symbol_name  
+	#将一个符号定义为局部符号，使得此符号不能够被其他程序文件可见。
+```
+
+### 3.属性弱化
+
+```asm
+@1.弱化属性
+	.weak symbol_name
+	#在汇编程序中，符号的默认属性为强（strong），.weak伪操作则用于设置符号的属性为弱（weak），如果此符号之前没有定义过，则同时创建此符号并定义其属性为weak。
+```
+
+如果符号的属性为weak，那么它无需定义具体的内容。在链接的过程中，另外一个属性为strong的同名符号可以将此weak符号的内容强制覆盖。利用此特性，.weak伪操作常用于预先预留一个空符号，使得其能够通过汇编器语法检查，但是在后续的程序中定义符号的真正实体，并且在链接阶段将空符号覆盖并链接。
+
+### 4.类型指定
+
+```asm
+.type  symbol_name , type description
+
+#.type伪操作用于定义符号的类型。
+#譬如“.type symbol,@function”即将名为symbol的符号定义为一个函数（function）。
+```
+
+### 5.地址对齐
+
+```asm
+	.align n
+	#让下一条语句地址对齐到地址为2^n的位置,实质就是将当前PC地址推进到“2的integer次方个字节”对齐的位置。
+	
+	.balign n
+	#伪操作用于将当前PC地址推进到“n个字节”对齐的位置。
+	
+	.zero n
+	#zero伪操作将从当前PC地址处开始分配n个字节空间并且用0值填充。
+```
+
+### 6.空间分配
+
+```asm
+.byte
+.byte expression [, expression]*
+.byte 0xFF
+#.byte伪操作将从当前PC地址处开始分配若干个字节（byte）的空间，每个字节填充的值由分号分隔开的expression指定。
+
+.2byte
+.2byte expression [, expression]*
+#.2byte伪操作将从当前PC地址处开始分配若干个双字节（2 bytes）的空间，每个双字节填充的值由分号分隔开的expression指定。空间分配的地址可以与双字节非对齐。
+
+.4byte
+.4byte expression [, expression]*
+#.4byte伪操作将从当前PC地址处开始分配若干个四字节（4 bytes）的空间，每个四字节填充的值由分号分隔开的expression指定。空间分配的地址可以与四字节非对齐。
+
+.8byte
+.8byte expression [, expression]*
+#.8byte伪操作将从当前PC地址处开始分配若干个八字节（8 bytes）的空间，每个八字节填充的值由分号分隔开的expression指定。空间分配的地址可以与八字节非对齐。
+
+.half
+.half expression [, expression]*
+
+#.half伪操作将从当前PC地址处开始分配若干个半字（half-word）的空间，每个半字填充的值由分号分隔开的expression指定。空间分配的地址一定与半字对齐（half-word aligned）。
+
+.word
+.word expression [, expression]*
+#.word伪操作将从当前PC地址处开始分配若干个字（word）的空间，每个字填充的值由分号分隔开的expression指定。空间分配的地址一定与字对齐（word aligned）。
+
+.dword
+.dword expression [, expression]*
+#.dword伪操作将从当前PC地址处开始分配若干个双字（double-word）的空间，每个双字填充的值由分号分隔开的expression指定。空间分配的地址一定与双字对齐（double-word aligned）。
+
+.string
+.string “string”
+#.string伪操作将从当前PC地址处开始分配若干个字节空间用于存放“string”字符串。字节的个数取决于字符串的长度。
+
+.assicz
+#.assicz汇编指令用来向当前段添加字符串。字符串是一串字节序列表示。.string和.asciz会在字符串末尾额外添加一个0值的字节，即NULL结尾的字符串。
+
+.assic
+#.assic汇编指令用来向当前段添加字符串
+
+.float
+.float 或者 .double expression [, expression]*
+
+#.float伪操作将从当前PC地址处开始分配若干个单精度浮点数（32位）的空间，每个单精度浮点数填充的值由分号分隔开的expression指定。空间分配的地址一定与32位对齐。
+
+#.double伪操作将从当前PC地址处开始分配若干个双精度浮点数（64位）的空间，每个双精度浮点数填充的值由分号分隔开的expression指定。空间分配的地址一定与64位对齐。
+
+
+.comm
+.comm或者.common name, length
+
+#.comm和.common伪操作用于声明一个名为name的未初始化存储区间，区间大小为length个字节。
+```
+
+
+
+```asm
+
+
 @3.声明一个宏
 	.equ DATA,0xFF
 		MOV R1,#DATA
@@ -435,9 +558,6 @@ LDR R1,STOP @将STOP代码段的第一条指令的机器码写入R1寄存器，�
 	MOV R1,#1
 	MOV R2,#2	
 .endr
-@7.
-.weak FUN     @弱化一个符号，即遇到使用未定义的符号不要去报错
-B FUNC        @会被编译成NOP
 
 @8.
 MOV R1,#1
@@ -446,12 +566,38 @@ MOV R2,#2
 
 @9.
 MOV R1,#1
-.byte 0xFF
-.align n           @让下一条语句地址对齐到地址为2^n的位置
+
+
 MOV R2,#2
 
 @9.
 .space n,#0x12        @申请任意字节n，并将其初始化
+```
+
+## 6.特殊
+
+### 1.缺省入口
+
+```asm
+_start
+@汇编程序的缺省入口，但是可以更改，想要更改其他标志，到相应的链接脚本（.lds文件）中去用ENTRY指明其他入口标志。标号可以直接认为是地址
+```
+
+### 2.U-Boot的宏
+
+`ENTRY() `和`ENDPROC()`这两个宏定义在`#include <linux/linkage.h>`中
+
+```asm
+@ENTRY(save_boot_params)展开后如下：
+.globl  save_boot_params
+.align  4
+save_boot_params:
+bx  lr
+
+@ENDPROC(save_boot_params)展开后如下：
+
+.type save_boot_params STT_FUNC
+.size save_boot_params, .-save_boot_params
 ```
 
 # U-Boot启动源码分析
@@ -463,17 +609,14 @@ MOV R2,#2
 首先看开头的头文件和全局符号，它们是代码运行的基础依赖：
 
 ```asm
-#include <asm-offsets.h>    // 定义汇编与C语言交互的地址偏移（如栈指针、全局数据结构偏移）
-#include <config.h>         // U-Boot 配置宏（如是否启用SPL、是否跳过底层初始化）
-#include <asm/system.h>     // ARM 系统操作宏（如中断控制、CPU模式切换）
-#include <linux/linkage.h>  // 定义函数入口/出口宏（如 ENTRY、ENDPROC）
-#include <asm/armv7.h>      // ARMv7 架构专属定义（如 CP15 寄存器、CPU 模式常量）
+	.globl reset              			 @声明 reset 为全局符号（复位入口，芯片上电后首条执行的指令地址）
+	
+	.globl save_boot_params_ret 		 @声明 save_boot_params 的返回点
+	
+	.type  save_boot_params_ret,%function @标记为函数类型（链接器需识别），需要遵循函数调用规范（如对齐、栈帧、符号表类型）
 
-.globl reset              @声明 reset 为全局符号（复位入口，芯片上电后首条执行的指令地址）
-.globl save_boot_params_ret @声明 save_boot_params 的返回点
-.type  save_boot_params_ret,%function @标记为函数类型（链接器需识别）
 #ifdef CONFIG_ARMV7_LPAE    @若启用ARMv7大物理地址扩展（LPAE，支持>4GB内存）
-.global	switch_to_hypervisor_ret @声明虚拟化模式返回点
+	.global	switch_to_hypervisor_ret @声明虚拟化模式返回点
 #endif
 ```
 
@@ -487,8 +630,7 @@ MOV R2,#2
 
 ```asm
 reset:
-    /* Allow the board to save important registers */
-    b	save_boot_params       @跳转到 save_boot_params，保存启动参数
+    b	save_boot_params       @跳转到 save_boot_params，保存启动参数，Allow the board to save important registers
 save_boot_params_ret:         @save_boot_params 的返回点
 ```
 
@@ -498,16 +640,17 @@ save_boot_params_ret:         @save_boot_params 的返回点
 
 ### 2.虚拟化支持检查
 
-可选，`CONFIG_ARMV7_LPAE` 启用时
+可选，`CONFIG_ARMV7_LPAE` 启用时调用。
 
 ```asm
 #ifdef CONFIG_ARMV7_LPAE
-/* check for Hypervisor support */
-mrc	p15, 0, r0, c0, c1, 1		@ 读取 ID_PFR1 寄存器（CPU 功能特性寄存器1）
-and	r0, r0, #CPUID_ARM_VIRT_MASK	@ 掩码出“虚拟化支持”位（CPUID_ARM_VIRT_MASK 是预定义常量）
-cmp	r0, #(1 << CPUID_ARM_VIRT_SHIFT) // 比较是否支持虚拟化（该位为1表示支持）
-beq	switch_to_hypervisor       // 若支持，跳转到 switch_to_hypervisor（进入虚拟化模式）
-switch_to_hypervisor_ret:     // 虚拟化模式返回点
+	/* check for Hypervisor support */
+	mrc	p15, 0, r0, c0, c1, 1		  	@ 读取 ID_PFR1 寄存器（CPU 功能特性寄存器1）
+	and	r0, r0, #CPUID_ARM_VIRT_MASK	@ 掩码出“虚拟化支持”位（CPUID_ARM_VIRT_MASK 是预定义常量）
+	cmp	r0, #(1 << CPUID_ARM_VIRT_SHIFT)@ 比较是否支持虚拟化（该位为1表示支持）
+	
+	beq	switch_to_hypervisor       @若支持，跳转到 switch_to_hypervisor（进入虚拟化模式）
+	switch_to_hypervisor_ret:     	@虚拟化模式返回点
 #endif
 ```
 
@@ -554,14 +697,14 @@ mcr	p15, 0, r0, c1, c0, 1  // 写回 ACTLR，生效 SMP 配置
 
 ```asm
 #if !(defined(CONFIG_OMAP44XX) && defined(CONFIG_SPL_BUILD))
-/* Set V=0 in CP15 SCTLR register - for VBAR to point to vector */
-mrc	p15, 0, r0, c1, c0, 0	@ 读取 SCTLR 寄存器（系统控制寄存器，控制 MMU、缓存、向量表模式）
-bic	r0, #CR_V		@ 清除 V 位（bit13）——禁用“高向量表”模式，让 VBAR 寄存器生效
-mcr	p15, 0, r0, c1, c0, 0	@ 写回 SCTLR
+	/* Set V=0 in CP15 SCTLR register - for VBAR to point to vector */
+	mrc	p15, 0, r0, c1, c0, 0	@ 读取 SCTLR 寄存器（系统控制寄存器，控制 MMU、缓存、向量表模式）
+	bic	r0, #CR_V			   @ 清除 V 位（bit13）——禁用“高向量表”模式，让 VBAR 寄存器生效
+	mcr	p15, 0, r0, c1, c0, 0	@ 写回 SCTLR
 
-/* Set vector address in CP15 VBAR register */
-ldr	r0, =_start            // 加载 U-Boot 向量表的起始地址（_start 是链接脚本指定的向量表入口）
-mcr	p15, 0, r0, c12, c0, 0	@ 将向量表地址写入 VBAR 寄存器（向量表基地址寄存器）
+	/* Set vector address in CP15 VBAR register */
+	ldr	r0, =_start            	@ 加载 U-Boot 向量表的起始地址（_start 是链接脚本指定的向量表入口）
+	mcr	p15, 0, r0, c12, c0, 0	@ 将向量表地址写入 VBAR 寄存器（向量表基地址寄存器）
 #endif
 ```
 
@@ -576,7 +719,7 @@ mcr	p15, 0, r0, c12, c0, 0	@ 将向量表地址写入 VBAR 寄存器（向量表
 /* Enable Asynchronous external abort after vectors setup */
 mrs	r0, cpsr
 bic	r0, r0, #0x100		@ 清除 CPSR 的 A 位（bit8）——启用异步外部中止
-msr	cpsr_x,r0           // 写回 CPSR 的扩展部分（cpsr_x 是 CPSR 的别名，针对 ARMv7）
+msr	cpsr_x,r0            @写回 CPSR 的扩展部分（cpsr_x 是 CPSR 的别名，针对 ARMv7）
 ```
 
 - **异步外部中止**：
@@ -588,12 +731,13 @@ msr	cpsr_x,r0           // 写回 CPSR 的扩展部分（cpsr_x 是 CPSR 的别�
 
 ```asm
 /* the mask ROM code should have PLL and others stable */
-#ifndef CONFIG_SKIP_LOWLEVEL_INIT  // 若未配置“跳过底层初始化”
-bl	cpu_init_cp15         // 1. 初始化 CP15 寄存器（缓存、MMU、TLB 等）
-#ifndef CONFIG_SKIP_LOWLEVEL_INIT_ONLY // 若未配置“仅跳过部分底层初始化”
-bl	cpu_init_crit         // 2. 初始化关键硬件（板级时钟、内存时序等）
+#ifndef CONFIG_SKIP_LOWLEVEL_INIT  @若未配置“跳过底层初始化”
+	bl	cpu_init_cp15         	@1. 初始化 CP15 寄存器（缓存、MMU、TLB 等）
+	#ifndef CONFIG_SKIP_LOWLEVEL_INIT_ONLY @若未配置“仅跳过部分底层初始化”
+		bl	cpu_init_crit       @2. 初始化关键硬件（板级时钟、内存时序等）
+	#endif
 #endif
-#endif
+
 bl	_main                 // 跳转到 C 语言主函数 _main（U-Boot 主体逻辑入口）
 ```
 
@@ -609,9 +753,9 @@ bl	_main                 // 跳转到 C 语言主函数 _main（U-Boot 主体逻
 ENTRY(c_runtime_cpu_setup)
 /* If I-cache is enabled invalidate it */
 #ifndef CONFIG_SYS_ICACHE_OFF  // 若未禁用指令缓存（I-Cache）
-mcr	p15, 0, r0, c7, c5, 0	@  invalidate icache（ invalidate I-Cache，清除指令缓存）
-mcr     p15, 0, r0, c7, c10, 4	@ DSB（数据同步屏障，确保缓存操作完成）
-mcr     p15, 0, r0, c7, c5, 4	@ ISB（指令同步屏障，确保后续指令从新缓存中读取）
+	mcr	p15, 0, r0, c7, c5, 0	    @  invalidate icache（ invalidate I-Cache，清除指令缓存）
+	mcr     p15, 0, r0, c7, c10, 4	@ DSB（数据同步屏障，确保缓存操作完成）
+	mcr     p15, 0, r0, c7, c5, 4	@ ISB（指令同步屏障，确保后续指令从新缓存中读取）
 #endif
 bx	lr                  // 返回调用者
 ENDPROC(c_runtime_cpu_setup)
@@ -627,7 +771,7 @@ ENDPROC(c_runtime_cpu_setup)
 #### 1.清除 TLB 和缓存
 
 ```asm
-mov	r0, #0			@ 准备 0 值用于 MCR 指令
+mov	r0, #0				   @ 准备 0 值用于 MCR 指令
 mcr	p15, 0, r0, c8, c7, 0	@ invalidate TLBs（清除所有 TLB 条目，TLB 是 MMU 的页表缓存）
 mcr	p15, 0, r0, c7, c5, 0	@ invalidate icache（清除 I-Cache）
 mcr	p15, 0, r0, c7, c5, 6	@ invalidate BP array（清除分支预测缓存，避免错误分支预测）
