@@ -1,6 +1,6 @@
-# MakeFile
 
-## 1.概述
+
+# 基本概述
 
 1. **含义**
 
@@ -13,40 +13,242 @@
 
    3.make 的主要用途是自动化构建过程，特别是编译和链接程序。
 
-## 		2.基本语法
+# 基本语法
 
-### 1.语法格式
+## 1.语法格式
 
 ```makefile
 目标（target）... : 依赖（prerequisites） ...
 	命令（command）
 ```
 
-### 		2.解释
+## 		2.具体解释
 
-1. **target目标**
-   它是我们要生成的东西，省略文件的路径时，默认为当前路径，目标文件可以是我们所需的最终文件或者可执行文件，也可以不是我们最终要生成的文件——伪目标。一个伪目标,仅仅是为了执行某条shell语句实现某个功能，并不生成文件。
+### 1.目标
 
-2. **prerequisites**
+目标是我们要生成的东西，省略文件的路径时，默认为生成到当前路径下。
 
-   要生成那个target所需要的文件，默认在当前目录下找，如果没有则找有无生成该依赖的makefile语句，此时依赖就是另外一条语句的目标。
+```makefile
+start.o : start.S
+	arm-linux-gcc -c start.S
+#会在当前目录下生成start.o这个文件，会新多出一个文件
 
-3. **command**
+lowlevel_init.o : lowlevel_init.S
+	arm-linux-gcc -c lowlevel_init.S
+	
+#如果直接输入make命令。只会去生成第一个start.o目标，而不会去生成其他的目标。
+```
 
-   任意shell命令，不一定是gcc命令，**@**作用是不显示命令再显示结果而是直接显示执行命令的结果。
+目标文件可以是我们所需的最终文件或者可执行文件，即能正在生成出来的一个文件；也可以仅仅是为了执行某些命令而实现某个功能，并不生成文件。
+
+```makefile
+.PHONY#虚假的意思
+all: start.o lowlevel_init.o
+
+start.o : start.S
+	arm-linux-gcc -c start.S
+#会在当前目录下生成start.o这个文件，会新多出一个文件
+
+lowlevel_init.o : lowlevel_init.S
+	arm-linux-gcc -c lowlevel_init.S
+	
+#如果直接输入make命令。只会去生成第一个all目标，就会去寻找依赖，如果当前目录下没有依赖，就会去寻找生成依赖的makefile语句。
+#由于all是伪目标，因此不会去生成一个名为all的文件。
+```
+
+### 2.依赖
+
+要生成目标target所需要的文件，makefile默认会在当前目录下寻找所需的依赖文件，如果没有则找有无生成该依赖的makefile语句，此时依赖就是另外一条语句的目标。
+
+### 3.命令
+
+任意shell命令，不一定是gcc命令，**@**作用是不显示命令再显示结果而是直接显示执行命令的结果。
+
+------
+
+# 		语句解析规则
+
+## 1.只生成一个目标
+
+只输入一个`make`，在makefile中默认只找第一条目标。故执行有多条语句的makefile时，应把生成最终目标的语句放在最前面，因为make默认只识别makefile的第一条语句，第一条语句在其找依赖文件时，默认会**在当前目录**下找，如果有该名称的文件，则直接用该文件，如果没有，则makefile中找是否有该依赖文件作为目标文件存在于另外一条语句中，有该语句，则先执行完该语句。就这样带动一连串的make语句被执行。
+
+## 2.生成指定目标
+
+```bash
+make  目标名
+#则寻找生成该目标的语句进行执行。
+```
+
+考虑一个场景：
+
+```makefile
+.PHONY
+all: start.o lowlevel_init.o
+	arm-linux-ld -Tmyboot.lds -o myboot start.o lowlevel_init.o
+	arm-linux0objcopy -o binary myboot myboot.bin
+	sudo dd if=myboot.bin of=/dev/sdb seek=1
+start.o : start.S
+	arm-linux-gcc -c start.S
+#会在当前目录下生成start.o这个文件，会新多出一个文件
+
+lowlevel_init.o : lowlevel_init.S
+	arm-linux-gcc -c lowlevel_init.S
+	
+#如果直接输入make命令。只会去生成第一个all目标，就会去寻找依赖，如果当前目录下没有依赖，就会去寻找生成依赖的makefile语句。
+#由于all是伪目标，因此不会去生成一个名为all的文件。
+```
+
+在每次`make`的时候，makefile都会顺序的往下执行，如果此时没插入SD卡，或者插入SD卡系统识别的名字不是`/dev/sdb`.那么当执行到下面语句时会报错，这是我们不希望看到的，因此就需要对该语句进行选择性执行，但又得保留makefile提供给我们得便利，因此可以再定义一个目标或者伪目标，就不会一直被执行，除法`make`时主动执行。
+
+```bash
+sudo dd if=myboot.bin of=/dev/sdb seek=1
+```
+
+改进如下：
+
+```makefile
+.PHONY
+all: start.o lowlevel_init.o
+	arm-linux-ld -Tmyboot.lds -o myboot start.o lowlevel_init.o
+	arm-linux0objcopy -o binary myboot myboot.bin
+start.o : start.S
+	arm-linux-gcc -c start.S
+#会在当前目录下生成start.o这个文件，会新多出一个文件
+
+lowlevel_init.o : lowlevel_init.S
+	arm-linux-gcc -c lowlevel_init.S
+
+.PHONY
+mksd:
+	sudo dd if=myboot.bin of=/dev/sdb seek=1
+```
+
+```bash
+make mksd
+```
+
+## 3.伪目标的优点
+
+1.解决默认只执行第一条语句的局限，介绍见上文。
+
+2.**指定执行的语句**中的目标名（可以是伪目标）与当前目录下文件名重名的冲突，此外新生成的文件会覆盖当前目录下重名的那个文件，以.PHONY做目标，会找并执行第一条伪目标语句。
+
+## 4.伪目标局限及改进
+
+考虑如下场景：
+
+```makefile
+.PHONY
+all: start.o lowlevel_init.o
+	arm-linux-ld -Tmyboot.lds -o myboot start.o lowlevel_init.o
+	arm-linux0objcopy -o binary myboot myboot.bin
+start.o : start.S
+	arm-linux-gcc -c start.S
+#会在当前目录下生成start.o这个文件，会新多出一个文件
+
+lowlevel_init.o : lowlevel_init.S
+	arm-linux-gcc -c lowlevel_init.S
+
+.PHONY
+mksd:
+	sudo dd if=myboot.bin of=/dev/sdb seek=1
+```
+
+由前面可以知道，伪目标all并不会正在去生成all文件，那就相当于没有all文件，而make语句执行与否是通过对比目标和依赖的最后修改时间来进行的，但不存在all文件，因此执行伪目标的时候，会一直认为all的依赖文件是最新的，因此每次`make`时都会执行all伪目标的那几条语句，这也是我们不希望看到的，因此可以改进我们的伪目标的定义。
+
+```makefile
+.PHONY
+all: myboot
+
+myboot: start.o lowlevel_init.o
+	arm-linux-ld -Tmyboot.lds -o myboot start.o lowlevel_init.o
+	arm-linux0objcopy -o binary myboot myboot.bin
+#目标之所以选择myboot，是因为myboot是直接由 start.o lowlevel_init.o生成而来的，只要判断myboot的依赖文件未更新，就不会执行生成myboot的命令，myboot就不会更新，则不会执行任何语句了。	
+	
+start.o : start.S
+	arm-linux-gcc -c start.S
+#会在当前目录下生成start.o这个文件，会新多出一个文件
+
+lowlevel_init.o : lowlevel_init.S
+	arm-linux-gcc -c lowlevel_init.S
+
+.PHONY
+mksd:
+	sudo dd if=myboot.bin of=/dev/sdb seek=1
+```
 
 
-### 		3.解析规则
 
-1. 只敲一个make，默认只找第一条目标，故执行有多条语句的makefile时，应把生成最终目标的语句放在最前面，因为make默认只识别makefile的第一条语句。
-   其找依赖文件，默认会**在当前目录**下找，如果有该名称的文件，则直接用该文件，如果没有，则makefile中找是否有该依赖文件作为目标文件存在于另外一条语句中，有该语句，则先执行完该语句。就这样带动一连串的make语句被执行。
+------
 
-2. make  目标名：则寻找生成该目标的语句进行执行。
+# 		自动化变量
 
-3. .PHONY（虚假的意思）:目标名
-   解决**make默认执行的第一条语句**或者**指定执行的语句**中的目标名（可以是伪目标）与当前目录下文件名重名的冲突，此外新生成的文件会覆盖当前目录下重名的那个文件，以.PHONY做目标，会找并执行第一条伪目标语句。
+## 1.产生背景
 
-## 		3.makefile变量
+倘若有成千上万的文件需要编译，不可能为每个文件编写一条makefile语句，因此为解决这个问题引入了自动化变量。自动化变量主要针对文件名，自动指变量的值会根据修改自动调整。
+
+## 2.通配符
+
+`%.o`表示当前目录下所有的`.o`文件，`%.s`表示当前目录下所有的`.s`文件。
+
+```makefile
+start.o : start.S
+	arm-linux-gcc -c start.S
+#会在当前目录下生成start.o这个文件，会新多出一个文件
+
+lowlevel_init.o : lowlevel_init.S
+	arm-linux-gcc -c lowlevel_init.S
+============================================================
+%.o : %.s
+	arm-linux-gcc -c %<
+
+```
+
+?????????
+
+**能使用%.c ：%.o这样的通配符的前提是：**
+
+在通配符使用语句前已经出现过了%.c的范围是哪些.c文件，不然%可以匹配任意，那么有无穷多个目标了，此外通配符并不匹配路径，所以带有路径的文件通配，要自己加上路径。
+
+## 3.表示依赖文件
+
+- $+所有依赖文件，可重复
+
+- `$^ `
+  所有依赖文件的集合，文件不重复。      
+
+- `$<`
+  表示所有依赖文件集合中的第一个依赖文件，所谓的第一个是按生成时间排序的第一个。
+
+- $?:所有时间戳比目标文件晚的依赖文件，即上一次修改时间比目标文件生成时间晚的文件，用于打印第二次编译时哪些依赖文件被修改了。
+
+## 4.表示目标文件
+
+- $*：不包含后缀 ，用于打印，对于本身没后缀的无效，对于可执行文件a.txt，他还是没后缀，.txt也算文件名不算后缀名，故打印无后缀的只能用$@  
+- `$@`
+  所有目标集合，集合里的每个目标文件都是完整的文件名字，有后缀名的也会包含后缀名，可以用于打印和编译 。       
+
+
+ 	比如提高编程速度，每次只要写一句`gcc`命令再不断复制粘贴带有自动变量的相同的语句即可。makefile隐含变量，针对shell命令，可以赋值，不赋值则用默认值.
+
+#### 3.命令（有默认值）
+
+- CC：默认值--cc 赋值交叉编译 CC = arm-linux-gcc
+
+- CPP：默认值--$(CC) -E预编译
+
+- RM：默认值rm -f
+
+
+#### 3.命令的选项（无默认值）
+
+- CFLAGS= -c -g -Wall 
+
+- CPPFLAGS
+
+- CXXFLAGS
+
+- LDFLAGS
 
 ### 		1.创建变量的目的
 
@@ -81,50 +283,6 @@
 
 - +=追加赋值
 
-### 		4.自动变量
-
-针对文件名，自动指变量的值会根据修改自动调整
-
-#### 1.依赖文件
-
-- $+所有依赖文件，可重复·    
-
-- $^ 所有依赖文件，不重复      
-
-- $<第一个依赖文件，按生成时间排序的第一个
-
-- $?:所有时间戳比目标文件晚的依赖文件，即上一次修改时间比目标文件生成时间晚的文件，用于打印第二次编译时哪些依赖文件被修改了。
-
-#### 2.目标文件
-
-- $*：不包含后缀 ，用于打印，对于本身没后缀的无效，对于可执行文件a.txt，他还是没后缀，.txt也算文件名不算后缀名，故打印无后缀的只能用$@  
-- $@目标文件完整名字，有后缀名的也包含后缀名，用于打印和编译        
-
-
- 		作用：提高编程速度，每次只要写一句gcc命令再不断复制粘贴带有自动变量的相同的语句即可。makefile隐含变量,针对shell命令，可以赋值，不赋值则用默认值.
-
-#### 3.命令（有默认值）
-
-- CC：默认值--cc 赋值交叉编译 CC = arm-linux-gcc
-
-- CPP：默认值--$(CC) -E预编译
-
-- RM：默认值rm -f
-
-
-#### 3.命令的选项（无默认值）
-
-- CFLAGS= -c -g -Wall 
-
-- CPPFLAGS
-
-- CXXFLAGS
-
-- LDFLAGS
-
-
-**通配符**：<u>%.c ：%.o用通配符的前提是在通配符使用语句前已经出现过了%.c的范围是哪些.c文件，不然%可以匹配任意，那么有无穷多个目标了，此外通配符并不匹配路径！！，所以带有路径的文件通配，要自己加上路径</u>
-
 ## 	4.makefile的条件判断
 
 1. ifeq（a,b）：a,b是否相等，if与（）间要隔开！！！
@@ -136,7 +294,7 @@
 4. ifndef   endif
 
 
-## 	5.makefile常用函数
+# 	常用标准函数
 
 #### 1.格式
 

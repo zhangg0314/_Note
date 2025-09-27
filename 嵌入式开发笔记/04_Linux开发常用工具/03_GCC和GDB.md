@@ -1,8 +1,8 @@
-# 	GCC编译工具
+# 	GCC编译工具链
 
 ## 1.GCC概念
 
-`GNU C Complie`编译器
+`GNU C Complie`编译器单独指C编译器，但现在多指GNU Complie Collection ，是一个工具集合。
 
 ## 2.GCC编译过程
 
@@ -59,6 +59,23 @@ gcc xxx.c -D VAULE = 1   //把value的值赋值为1
 ```
 
 ------
+
+# arm-linux-xx
+
+## 1.链接.o文件
+
+```bash
+arm-linux-ld -Txx.lds -o a.out main.o math.o
+#xx.lds,链接脚本
+```
+
+## 2.生成bin文件
+
+```
+arm-linux-objcopy -o binary a.out a.bin
+```
+
+
 
 # 		GDB调试
 
