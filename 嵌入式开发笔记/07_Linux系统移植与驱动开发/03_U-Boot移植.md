@@ -1,15 +1,15 @@
-# U-Boot基本概念
+# 引导程序基本概念
 
-`Bootloader`是在操作系统运行之前运行的一小段代码，用于将软硬件环境初始化到一个合适的状态，比如初始化时钟，中断，`DRAM`控制器等外设，为操作系统的加载和运行做准备（其本身不是操作系统），再把Linux从Flash拷贝到`DRAM`中，最后再启动Linux内核。Bootloader是启动引导程序的统称，，类似于操作系统与Linux的概念，嵌入式Linux常用的Bootloader是U-Boot。
+Bootloader是在操作系统运行之前运行的一小段代码，用于将软硬件环境初始化到一个合适的状态，比如初始化时钟，中断，`DRAM`控制器等外设，为操作系统的加载和运行做准备（其本身不是操作系统），再把Linux从Flash拷贝到`DRAM`中，最后再启动Linux内核。Bootloader是启动引导程序的统称，类似于操作系统与Linux的概念，嵌入式Linux常用的Bootloader是U-Boot。
 
-# U-Boot基本功能
+# 引导程序基本功能
 
 - 初始化软硬件环境
 - 引导加载Linux内核
 - 给Linux内核传参
-- 执行用户命令
+- 执行用户命令（如U-Boot命令）
 
-# U-Boot板级初始化流程
+# U-Boot初始化流程
 
 ## 1.U-Boot启动过程
 
@@ -82,19 +82,25 @@ BootROM 对 DDR 的操作是 “临时应急”，仅为加载 U-Boot 服务；�
 
 ## 2.U-Boot初始化流程
 
-**参考**:U-Boot源码根目录下的README。
+> [!NOTE]
+>
+> 参考U-Boot源码根目录下的**README**。
 
 ### 1.整体流程概述
 
-U-Boot（包括 SPL 和主 U-Boot）的板级初始化遵循统一规则，核心流程为：
-`架构相关的 start.S` → `lowlevel_init()` → `board_init_f()` → （BSS 清除 + U-Boot镜像重定位） → `board_init_r()` → `main_loop()`
+```c
+//U-Boot（包括 SPL 和主 U-Boot）的板级初始化遵循统一规则，核心流程为：
+架构相关的 start.S → lowlevel_init() → board_init_f() → （BSS 清除 + U-Boot镜像重定位） → board_init_r() → main_loop()
 
-- **起点**：从架构 / CPU 专属的 `start.S` 开始（如 ARMv7 的 `arch/arm/cpu/armv7/start.S`），这是汇编级别的启动入口。
-- **核心目标**：逐步搭建硬件环境（从最基础的执行条件到完整的内存 / 外设可用），最终进入 U-Boot 主循环处理命令和启动系统。
+    
+//main_loop：uboot-主循环
+//起点：从架构 / CPU 专属的start.S开始（如 ARMv7 的 `arch/arm/cpu/armv7/start.S`），这是汇编级别的启动入口。
+//核心目标：逐步搭建硬件环境（从最基础的执行条件到完整的内存 / 外设可用），最终进入 U-Boot 主循环处理命令和启动系统。
+```
 
 ### 2.三大核心函数
 
-#### 1. `lowlevel_init()`
+#### 1`lowlevel_init()`
 
 - **作用低位：**最早期的 “保命” 初始化
 - **核心目的**：仅完成让程序能**到达 `board_init_f()`** 的最基本操作（“bare minimum”），是启动流程的 “敲门砖”。
