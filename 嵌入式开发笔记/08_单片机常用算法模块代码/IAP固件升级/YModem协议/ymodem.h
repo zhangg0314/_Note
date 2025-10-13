@@ -13,7 +13,6 @@ extern "C" {
 #endif
 
 #include "at32f403a_407_board.h"
-#include "flash.h"
 
 /** @addtogroup USART_iap_bootloader
   * @{

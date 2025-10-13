@@ -1,11 +1,8 @@
 #include "ymodem.h"
-#include "usart.h"
 #include "common.h"
-
+#include "flash.h"
+#include "WDT.h"
 static uint8_t packet_data[PACKET_1K_SIZE + PACKET_OVERHEAD_LEN];
-static uint8_t HMIInfo_Filename[] = "\r\nFile name: ";
-static uint8_t HMIInfo_Filesize[] = "\r\nFile size: ";
-static uint8_t HMIInfo_FilesizeUnit[] = " bytes.\r\n";
 /**
  * @brief  发送取消Ymodem传输命令，连续发两个CAN信号
  * @param  none
@@ -74,18 +71,6 @@ static uint16_t Ymodem_CRC16(const uint8_t *data, uint32_t length)
     }
     return crc;
 }
-/**
- * @brief  计算Ymodem CRC并按协议要求格式输出（高字节在前）
- * @param  data: 待校验数据
- * @param  length: 数据长度
- * @param  crc_buf: 输出CRC的缓冲区（至少2字节）
- */
-static void Ymodem_GetCRC(const uint8_t *data, uint32_t length, uint8_t *crc_buf)
-{
-    uint16_t crc = Ymodem_CRC16(data, length);
-    crc_buf[0] = (crc >> 8) & 0xFF; // 高8位在前（Ymodem协议要求）
-    crc_buf[1] = crc & 0xFF;        // 低8位在后
-}
 
 /**
  * @brief   从发送端接收一个完整数据包
@@ -100,12 +85,10 @@ static Ymodem_Status Receive_Packet(Ymodem_Handle_t *handle, uint8_t *data, int3
 {
     uint8_t _start_ch; // 接收帧的第一个字节或者控制信号
     uint16_t packet_size, crc;
-
     if (handle->hal->recv_byte(&_start_ch, 1, timeout) != TRUE) // 接收完整包的第一个字节并判断
     {
         return YMODEM_ERR_TIMEOUT;
     }
-
     *length = 0;
     switch (_start_ch)
     {
@@ -196,11 +179,6 @@ static Ymodem_Status Packet_Parser(Ymodem_Handle_t *handle, uint8_t *packet_data
         {
             return YMODEM_ERR_FILE_SIZE;
         }
-        //handle->hal->send_buff(HMIInfo_Filename,sizeof(HMIInfo_Filename));
-        //handle->hal->send_buff(handle->m_file_name,strlen((const char*)handle->m_file_name));
-        //handle->hal->send_buff(HMIInfo_Filesize,sizeof(HMIInfo_Filesize));
-        //handle->hal->send_buff(file_size,strlen((const char*)file_size));
-        //handle->hal->send_buff(HMIInfo_FilesizeUnit,sizeof(HMIInfo_FilesizeUnit));
         // 测试数据包是否过大
         if (handle->m_file_size > (FLASH_SIZE * 1024 - 1))
         {
@@ -251,16 +229,17 @@ Ymodem_Status Ymodem_Init(Ymodem_Handle_t *handle, Ymodem_Hal_t *hal, uint8_t *b
  */
 Ymodem_Status Ymodem_Receive(Ymodem_Handle_t *handle, uint32_t write_addr)
 {
-    uint8_t eot_count = 0;
+    uint8_t eot_count = 0, i;
     int32_t packet_length;
     uint32_t packets_received, errors = 0;
     Ymodem_Status parser_result, recive_result;
 
-    // 不断发送字符C，以得到发送端响应
+    // 发送字符C，以得到发送端响应
     Ymodem_Request(handle);
-    for (;;)
+    for (i = 0; i < 3; i++)
     {
-        recive_result = Receive_Packet(handle, packet_data, &packet_length, 1000, 0);
+        recive_result = Receive_Packet(handle, packet_data, &packet_length, 5000000, 0);
+        WDT_FreeDog();
         if (recive_result == YMODEM_OK && packet_length > 0) // 得到正确起始帧。退出循环
         {
             parser_result = Packet_Parser(handle, packet_data, packet_length, 0); // 解析起始帧
@@ -278,7 +257,7 @@ Ymodem_Status Ymodem_Receive(Ymodem_Handle_t *handle, uint32_t write_addr)
         }
         else if (recive_result == YMODEM_ERR_TIMEOUT)
         { // 超时，继续发字符C
-            //handle->hal->delay_ms(1000);
+            // handle->hal->delay_ms(1000);
             Ymodem_Request(handle);
         }
         else
@@ -287,11 +266,16 @@ Ymodem_Status Ymodem_Receive(Ymodem_Handle_t *handle, uint32_t write_addr)
             return recive_result;
         }
     }
+    if (i == 3)
+    {
+        return YMODEM_ERR_CANCELLED;
+    }
 
     // 接收数据帧
     for (packets_received = 1;;)
     {
-        recive_result = Receive_Packet(handle, packet_data, &packet_length, 1000, packets_received);
+        recive_result = Receive_Packet(handle, packet_data, &packet_length, 5000000, packets_received);
+        WDT_FreeDog();
         if (recive_result == YMODEM_ERR_FRAME) // 帧错误
         {
             Ymodem_NegativeAcknowledge(handle);
@@ -339,7 +323,9 @@ Ymodem_Status Ymodem_Receive(Ymodem_Handle_t *handle, uint32_t write_addr)
                 if (handle->m_tmp_len > 0 && handle->m_tmp_len == FLASH_SECTOR_SIZE)
                 {
                     handle->m_tmp_len = 0;
+                    WDT_FreeDog();
                     handle->hal->storage_write(write_addr, handle->m_file_buf); // 写入剩余不满2048字节的数据
+                    WDT_FreeDog();
                     write_addr += FLASH_SECTOR_SIZE;
                 }
                 Ymodem_Acknowledge(handle);
@@ -348,9 +334,11 @@ Ymodem_Status Ymodem_Receive(Ymodem_Handle_t *handle, uint32_t write_addr)
                     if (handle->m_tmp_len > 0)
                     {
                         memset(handle->m_file_buf + handle->m_tmp_len, 0, FLASH_SECTOR_SIZE - handle->m_tmp_len);
+                        WDT_FreeDog();
                         handle->hal->storage_write(write_addr, handle->m_file_buf); // 写入剩余不满2048字节的数据
+                        WDT_FreeDog();
                     }
-                    //Ymodem_Acknowledge(handle);
+                    // Ymodem_Acknowledge(handle);
                     return YMODEM_OK;
                 }
             }
