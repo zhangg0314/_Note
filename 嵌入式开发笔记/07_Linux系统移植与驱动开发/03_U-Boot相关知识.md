@@ -2,12 +2,16 @@
 
 Bootloader是在操作系统运行之前运行的一小段代码，用于将软硬件环境初始化到一个合适的状态，比如初始化时钟，中断，`DRAM`控制器等外设，为操作系统的加载和运行做准备（其本身不是操作系统），再把Linux从Flash拷贝到`DRAM`中，最后再启动Linux内核。Bootloader是启动引导程序的统称，类似于操作系统与Linux的概念，嵌入式Linux常用的Bootloader是U-Boot。
 
+------
+
 # 引导程序基本功能
 
 - 初始化软硬件环境
 - 引导加载Linux内核
 - 给Linux内核传参
 - 执行用户命令（如U-Boot命令）
+
+------
 
 # U-Boot初始化流程
 
@@ -80,7 +84,7 @@ BootROM 与 U-Boot 的 DDR 操作分工,以常见的 ARM 架构 SoC 为例，流
 
 BootROM 对 DDR 的操作是 “临时应急”，仅为加载 U-Boot 服务；而 U-Boot 对 DDR 的初始化是 “系统级准备”，为整个启动流程（包括自身运行、内核加载）提供稳定、高性能、适配硬件的内存环境。两者目标不同，因此 U-Boot 必须重新初始化 DDR，不能依赖 BootROM 的有限操作。
 
-## 2.U-Boot初始化流程
+## 2.板级初始化流程
 
 > [!NOTE]
 >
@@ -88,9 +92,11 @@ BootROM 对 DDR 的操作是 “临时应急”，仅为加载 U-Boot 服务；�
 
 ### 1.整体流程概述
 
+该流程是板卡（boards）预设的启动流程（intended start-up flow”，即硬件板卡正常启动时应遵循的标准步骤。该启动流程对两类程序均适用 ——**SPL（Secondary Program Loader，二级程序加载器）** 和 **U-Boot proper（标准 U-Boot 程序）**，且二者需遵循相同规则（follow the same rules）。
+
 ```c
 //U-Boot（包括 SPL 和主 U-Boot）的板级初始化遵循统一规则，核心流程为：
-架构相关的 start.S → lowlevel_init() → board_init_f() → （BSS 清除 + U-Boot镜像重定位） → board_init_r() → main_loop()
+架构相关的start.S → lowlevel_init() → board_init_f() → （BSS 清除 + U-Boot镜像重定位） → board_init_r() → main_loop()
 
     
 //main_loop：uboot-主循环
@@ -98,39 +104,7 @@ BootROM 对 DDR 的操作是 “临时应急”，仅为加载 U-Boot 服务；�
 //核心目标：逐步搭建硬件环境（从最基础的执行条件到完整的内存 / 外设可用），最终进入 U-Boot 主循环处理命令和启动系统。
 ```
 
-### 2.三大核心函数
-
-#### 1`lowlevel_init()`
-
-- **作用低位：**最早期的 “保命” 初始化
-- **核心目的**：仅完成让程序能**到达 `board_init_f()`** 的最基本操作（“bare minimum”），是启动流程的 “敲门砖”。
-- 限制条件（极其严格）：
-  - 无 `global_data`（全局数据结构）和 BSS 段（未初始化的全局变量区域）可用；
-  - 通常无栈（ARMv7 可能临时有栈但会被移除）；
-  - **禁止**初始化 SDRAM（内存）或使用控制台（串口输出）；
-  - 仅能操作芯片内部寄存器（如关闭 watchdog、配置关键引脚），不能依赖外部硬件。
-- 实现特点：
-  - 几乎不需要实现（多数场景下默认空操作即可）；
-  - 必须正常返回（不能跳转或挂起）。
-
-#### 2. `board_init_f()`
-
-- **作用地位：**搭建 “过渡环境”（为 `board_init_r()` 铺路）
-- **核心目的**：初始化关键硬件，让系统具备运行 `board_init_r()` 的条件，主要包括 **SDRAM（内存）** 和 **串口 UART**（调试输出）。
-- **可用资源与限制**：
-  - `global_data` 可用（存储临时系统信息，如内存大小、硬件状态）；
-  - 栈位于 SRAM（芯片内部小容量内存，无需初始化即可用）；
-  - **BSS 不可用**（不能使用全局 / 静态变量，只能用栈变量和 `global_data`）。
-- **非 SPL 场景（主 U-Boot）**：
-  - 调用 `dram_init()` 初始化 SDRAM（如果 SPL 即`spl_init()`已完成，此处可空实现）。
-- **SPL 场景**：
-  - 可重写整个 `board_init_f()` 函数以适配特殊需求；
-  - 必要时可调用 `preloader_console_init()` 初始化早期串口（用于调试）；
-  - 必须完成 SDRAM 初始化和 UART 所需的硬件配置；
-  - 无需手动清除 BSS（由 `crt0.S` 自动处理）；
-  - 必须正常返回（不能直接调用 `board_init_r()`）。
-
-#### 3. BSS 清除与重定位
+### 2.BSS 清除与重定位
 
 在 `board_init_f()` 完成后、`board_init_r()` 执行前，会**自动**进行两项关键操作：
 
@@ -139,21 +113,49 @@ BootROM 对 DDR 的操作是 “临时应急”，仅为加载 U-Boot 服务；�
   - **SPL**：若定义 `CONFIG_SPL_STACK_R`，栈和 `global_data` 会被迁移到 `CONFIG_SPL_STACK_R_ADDR` 下方。
   - **主 U-Boot**：整个 U-Boot 镜像被重定位到内存顶部。
 
-#### 4. `board_init_r()`
+### 3.三大核心函数
 
-- **作用地位：**主逻辑执行（进入可交互阶段）。
-- **核心目的**：执行主要初始化逻辑，最终进入 `main_loop()`（U-Boot 命令行交互）。
-- **可用资源**：
-  - `global_data` 可用；
-  - SDRAM 已初始化（可使用大容量内存）；
-  - BSS 可用（可正常使用全局 / 静态变量）。
-- **非 SPL 场景（主 U-Boot）**：
-  - U-Boot 已**重定位**到内存顶部并从那里运行；
-  - 初始化各类驱动、环境变量、命令系统，最终进入命令行。
-- **SPL 场景**：
-  - 栈可位于 SDRAM（若 `CONFIG_SPL_STACK_R` 和 `CONFIG_SPL_STACK_R_ADDR` 指向 SDRAM）；
-  - 可通过 `CONFIG_SPL_BOARD_INIT` 配置 `spl_board_init()` 函数，在其中调用 `preloader_console_init()` 初始化串口；
-  - 核心任务：加载主 U-Boot 镜像（或在 falcon 模式下直接加载 Linux 内核）。
+#### 1`lowlevel_init()`
+
+1. **核心作用**：是启动过程中最早期的初始化函数，仅完成最基础的设置，确保程序能正常执行到`board_init_f()`函数。
+2. **限制条件**：
+   - 不依赖`global_data`（全局数据结构）和 BSS 段（未初始化数据区）
+   - 基本没有栈（ARMv7 架构可能有临时栈，但很快会被移除）
+   - 禁止初始化 SDRAM（内存）和使用控制台输出
+   - 只做让程序能继续执行到`board_init_f()`的最低限度工作
+3. **使用场景**：几乎不需要自定义实现这个函数（**通常使用默认实现**）
+4. **执行要求**：需要正常返回，不能在此处终止执行流程。
+
+#### 2. `board_init_f()`
+
+1. **核心作用**：为`board_init_r()`函数的运行做准备，重点初始化 SDRAM（同步动态随机存储器）和串行 UART（通用异步收发传输器），使硬件达到可运行后续初始化程序的状态。
+2. **运行环境**：
+   - 可以访问`global_data`（全局数据结构**GD**，通常通过一个宏定义如 `DECLARE_GLOBAL_DATA_PTR`访问，本质上是一个指向 SRAM 中特定位置的指针，而**不属于传统意义上的全局变量**）
+   - 栈（stack）位于 SRAM（静态随机存储器）中
+   - BSS 段（未初始化的全局变量区域）不可用，因此不能使用全局变量或静态变量，只能使用栈变量和`global_data`
+3. **非 SPL 相关说明**：
+   - 会调用`dram_init()`来初始化 DRAM（动态随机存储器）
+   - 若在 SPL（Secondary Program Loader，次级程序加载器）中已完成 DRAM 初始化，此函数可什么都不做
+4. **SPL 相关说明**：
+   - 可根据需要用自定义版本覆盖整个`board_init_f()`函数
+   - 在极端情况下可在此处调用`preloader_console_init()`
+   - 需完成 SDRAM 初始化以及 UART 工作所需的所有设置
+   - 无需清理 BSS 段，这部分工作会由`crt0.S`完成
+   - 必须正常返回，不能直接调用`board_init_r()`
+
+#### 3. `board_init_r()`
+
+- **主要作用**：承担 U-Boot 启动阶段的主要执行逻辑，包含通用初始化代码，最终会跳转到 `main_loop()` 进入命令行交互阶段。
+- **运行环境**：
+  - 可访问 `global_data` 全局数据结构
+  - SDRAM 已初始化可用
+  - BSS 段已准备好，所有静态 / 全局变量可正常使用
+- **非 SPL 场景特性**：
+  U-Boot 已重定位到SDRAM内存顶部，并从该位置运行。
+- **SPL（Secondary Program Loader）场景特性**：
+  - 若定义了 `CONFIG_SPL_STACK_R` 且 `CONFIG_SPL_STACK_R_ADDR` 指向 SDRAM，栈可位于 SDRAM 中
+  - 可在此处调用 `preloader_console_init()`（通常通过开启 `CONFIG_SPL_BOARD_INIT` 并实现 `spl_board_init()` 函数来完成）
+  - 负责加载 U-Boot 主程序，或在 falcon 模式下直接加载 Linux 内核
 
 ### 3.SPL 与主 U-Boot 的共性与差异
 
@@ -167,19 +169,13 @@ BootROM 对 DDR 的操作是 “临时应急”，仅为加载 U-Boot 服务；�
 
 ### 4.整体概况
 
-​	首先对开发板上的软硬件环境做进一步初始化，然后将Linux内核、设备树(dtb)、根文件系统(rootfs)从外部存储器（或网络）搬移到内存，然后跳转到linux运行。Linux开始运行后先对系统环境做初始化，当系统启动完成后，Linux再从内存中（或网络）挂载根文件系统。
+首先对开发板上的软硬件环境做进一步初始化，然后将Linux内核、设备树(dtb)、根文件系统(rootfs)从外部存储器（或网络）搬移到内存，然后跳转到linux运行。Linux开始运行后先对系统环境做初始化，当系统启动完成后，Linux再从内存中（或网络）挂载根文件系统。
 
 大致过程如下：
 
 1. 第一阶段：初始化时钟，关闭看门狗，关中断，关闭MMU，TLB，DCACHE，ICACHE等，初始化SDRAM控制器，初始化NAND FLASH控制器等。
 
 2. 第二阶段：初始化一个串口用于调试打印，检测系统内存映射，将内核映像和根文件系统映像从Flash上读到DRAM空间中，为内核**设置启动参数**，调用内核。
-
-U-Boot 的板级初始化流程是一个 **“逐步解锁硬件资源”** 的过程：
-
-- `lowlevel_init()` 解决 “能否执行下一步” 的问题（最基础条件）；
-- `board_init_f()` 解决 “能否访问内存和串口” 的问题（过渡环境）；
-- `board_init_r()` 解决 “能否运行完整逻辑” 的问题（最终环境）。
 
 这种分层设计既保证了对不同硬件的兼容性（通过板级函数定制），又维持了 U-Boot 核心逻辑的统一性（通用代码路径），同时 SPL 与主 U-Boot 共享同一套规则，简化了跨阶段开发。
 

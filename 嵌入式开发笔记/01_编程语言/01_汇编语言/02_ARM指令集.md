@@ -879,3 +879,5 @@ ENDPROC(switch_to_hypervisor)
 # 参考链接
 
 [ARM指令集详解(超详细！带实例!）_arm指令编程手册-CSDN博客](https://blog.csdn.net/mickey35/article/details/82011449)
+
+[ARMv7-A 那些事 - 5.CP15协处理器 - 知乎](https://zhuanlan.zhihu.com/p/663981666)
