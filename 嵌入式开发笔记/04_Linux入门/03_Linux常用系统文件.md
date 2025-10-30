@@ -1,3 +1,43 @@
+# 硬件信息
+
+## 1.查看CPU硬件信息
+
+```shell
+cat /proc/cpuinfo
+
+#/proc/cpuinfo 包含 CPU 硬件信息，其中 model name、Hardware 或 Processor 字段会显示 CPU 型号或厂商相关信息：
+```
+
+示例：9G25平台集中器
+
+```shell
+[root@/home/app]$cat /proc/cpuinfo
+processor	: 0
+model name	: ARM926EJ-S rev 5 (v5l)
+BogoMIPS	: 199.06
+Features	: swp half thumb fastmult edsp java 
+CPU implementer	: 0x41
+CPU architecture: 5TEJ
+CPU variant	: 0x0
+CPU part	: 0x926
+CPU revision	: 5
+
+Hardware	: Atmel AT91SAM9  #SOC平台
+Serial		: 0000000000000000
+```
+
+## 2.查看芯片SOC具体型号
+
+```shell
+dmesg | grep AT91SAM9 #SOC平台
+
+#示例
+[root@/home/app]$dmesg | grep AT91SAM9
+Machine model: Atmel AT91SAM9G25-EK
+```
+
+
+
 ## 4.常用配置目录/文件
 
 ### 1./etc目录下的文件

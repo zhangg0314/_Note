@@ -1,406 +1,233 @@
-# SSH
+# `Linux`常用命令
 
-## 1.`SSH`介绍及应用
+## 1.文件管理
 
-**SSH（Secure Shell，安全外壳协议）** 是一种建立在应用层和传输层基础上的网络协议，用于在不安全的网络环境中为两台计算机之间提供加密的远程登录、命令执行、文件传输等安全通信服务。SSH 通过**数据加密**、**身份认证**和**完整性校验**三大核心机制，确保通信过程的安全性。
-
-### 1.`SSH` 的核心功能
-
-1. **远程登录**
-   允许用户通过命令行界面（`CLI`）远程登录到服务器、路由器、嵌入式设备等，就像在本地操作一样执行命令。例如，管理员可通过 SSH 登录云服务器进行配置管理。
-2. **远程命令执行**
-   无需交互式登录，直接在本地通过 SSH 向远程设备发送单条或批量命令并获取结果，适合自动化脚本（如 Shell 脚本、Python 脚本）调用。
-3. **安全文件传输**
-   基于 SSH 协议衍生出的**SCP（Secure Copy）** 和**SFTP（SSH File Transfer Protocol）** 工具，可实现加密的文件上传 / 下载，替代不安全的 FTP 协议。
-4. **端口转发（隧道）**
-   通过 SSH 建立加密隧道，将其他协议（如 HTTP、`MySQL`）的流量封装在 SSH 连接中传输，绕过网络限制或增强非加密协议的安全性（例如，通过 SSH 隧道访问内网数据库）。
-
-### 2.`SSH` 的工作原理（简化流程）
-
-1. **建立连接**
-   客户端向服务器发起 TCP 连接（默认端口 22），双方协商协议版本和加密算法（如 `AES`、`ChaCha20`）。
-2. **身份认证**
-   - **密码认证**：客户端输入服务器账户密码，密码经加密后传输（避免明文泄露）。
-   - **密钥认证**（更安全）：
-     - 客户端生成一对非对称密钥（公钥 + 私钥），将公钥上传至服务器的`~/.ssh/authorized_keys`文件。
-     - 登录时，服务器用公钥加密随机信息，客户端用私钥解密并返回结果，验证通过则无需密码。
-3. **数据传输**
-   认证通过后，双方协商会话密钥，后续所有数据均通过该密钥加密传输，同时校验数据完整性，防止篡改。
-
-### 3.常见应用场景
-
-1. **服务器管理**
-   运维人员通过 SSH 远程管理 Linux 服务器（如部署程序、查看日志、配置防火墙），几乎是服务器管理的标准方式。
-2. **嵌入式设备调试**
-   路由器、物联网设备（如树莓派）、工业控制器等常支持 SSH，方便开发者远程调试和配置。
-3. **安全文件传输**
-   用`scp`命令快速传输文件（如`scp localfile user@remote:/path`），或用`FileZilla`等工具通过 SFTP 图形化管理文件。
-4. **绕过网络限制**
-   通过 SSH 动态端口转发（如`ssh -D 1080 user@remote`）搭建 SOCKS 代理，实现科学上网或访问内网资源。
-5. **自动化脚本**
-   在 CI/CD 流程中，通过 SSH 自动向服务器部署代码；或用 Python 的`paramiko`库批量执行远程命令。
-
-### 4.常用工具
-
-- **客户端工具**
-  - 命令行：`Linux/macOS` 自带`ssh`命令，Windows 可通过 PowerShell（Win10+）、Git Bash、PuTTY 实现。
-  - 图形化：Xshell、FinalShell、MobaXterm（支持多标签、密钥管理、SFTP 集成）。
-- **服务器端**：Linux 默认安装`openssh-server`，通过`systemctl start sshd`启动服务。
-
-## 2.`SSH`安装
-
-### 1.服务器和客户端安装
+### 1.创建文件
 
 ```bash
-sudo apt install openssh-server  #下载安装ssh服务的服务器
-sudo apt install openssh-client  #下载安装ssh服务的客户端
+vi a.txt 				  #默认打开a.txt，没有则创建再打开
+
+touch <FILENAME>           #创建/打开文件并将文件最新修改时间更改为当前时间
+
+touch File{1..5}.txt       #结合通配符，创建多个指定名称的空文件
 ```
 
-### 2.查看版本信息
+### 2.查找文件
 
 ```bash
-ssh -V
+find 路径 条件 文件名
+find [搜索路径] [选项] [正则表达式]
+	[选项]
+		-name	#根据文件名查找		eg:find ./ -name = *.txt
+		-type	#根据文件类型查找       eg:find ./ -type = l
+		-size	#根据文件大小查找       大于 n   -n：小于 n     n：等于 n
+		-maxdepth n #搜索目录递归的深度为n，省略默认全盘搜索
+		-exec…… {}\  #进一步处理搜索结果
+#组合条件:查找当前目录及其子目录下所有属于用户 username 或大小大于 1MB 的文件
+find . -type f \( -user username -o -size +1M \)
+
+
+#全盘搜索系统中所有后缀为.mp4的文件，并删除所有查找到的文件
+find / -name "*.mp4" -exec rm -rf {} \;
 ```
 
-### 3.启用ssh服务
+### 3.目录管理
 
 ```bash
-sudo systemctl start ssh.service
-sudo systemctl enable ssh.service
+pwd		#显示当前工作区所在路径的绝对路径
+
+
+ls -altr               	   #显示当前文件夹下的文件及文件夹
+	[option]	-a		  #显示所有文件及文件夹，包括隐藏文件
+			    -l		  #以列表，即显示文件名，大小，日期，权限等方式显示文件及文件夹
+			    -t		  #按修改时间排序，最近修改的排第一
+			    -r		  #如果进行排序，则倒序显
+cd  [Directory]             #切换当前工作路径,缺省Directory默认回到home目录
+
+
+mkdir <DIRECTORYNAME>      	   #创建文件夹        
+	[option]    -p(--parent)   #级联创建文件夹
+
+
+rmdir <DIRECTORYNAME>     	   #删除空目录        
+	[option]    -p             #递归删除文件夹，先删子目录，之后若父目录也空则也删除，故p后面的路径要包含父目录名和子目录名  
 ```
 
-### 4.配置SSH服务
-
-[SSH远程登陆配置sshd_config文件详解-阿里云开发者社区](https://developer.aliyun.com/article/972993)
+### 4.查看文件类型
 
 ```bash
-vi  /etc/ssh/sshd_config  #打开服务器配置文件,配置配置验证方式是否只能为密码还是密钥
-```
-
-## 3.`SSH`远程连接
-
-SSH（Secure Shell）是一种用于安全远程登录和管理服务器的网络协议。通过SSH，用户可以在本地计算机上安全地连接到远程服务器，并执行各种操作。以下是SSH远程登录的基本命令和一些常用选项。
-
-```bash
-ssh [options] [username]@[hostname_or_IP]
-	
-	[username] #如果本地用户名与远程服务器上的用户名相同，可以直接省略用户名
-	[hoostname_or_IP]	#主机名或者IP地址
-	[options]
-		-p #指定端口号，默认为22
-		-i #指定私钥文件（带绝对路径）比如ssh -i ~/.ssh/id_rsa user@192.168.1.100
-		-J # 如果需要通过跳板机（中间服务器）访问目标服务器，可以使用  -J  选项，比如ssh -J user1@jump_host user2@target_host、
-		-v #SSH客户端会输出详细的调试信息
-```
-
-## 4.`SSH`免密登录
-
-- **本地主机生成密钥对**
-
-  ```bash
-  ssh-keygen  [option]
-  		[option]
-  			-t #type:指定密钥类型（如 rsa、dsa、ecdsa、ed25519）。默认为 rsa。
-  			-f #file:指定生成的密钥文件名。默认为 ~/.ssh/id_rsa（对于 RSA 密钥）。
-  			-C #customer：添加注释，通常用于描述密钥的用途或用户信息。
-  			-N #设置私钥的密码（passphrase）。如果不设置密码，则私钥无密码保护。
-  ```
-
-- **添加公钥到远程主机**
-
-  ```bash
-  cat id_xxx.pub >> ~/.ssh/authorized_keys #生成密钥对后，需要将公钥添加到远程服务器的 ~/.ssh/authorized_keys 文件中，以便进行无密码登录。
-  ```
-
-- **配置本地主机的~/.ssh/config文件（可选)**
-
-  ```bash
-  #SSH（Secure Shell）的 config 文件是一个非常有用的配置文件，它允许用户自定义 SSH 客户端的行为，简化 SSH 连接过程，并提高安全性。默认情况下，SSH 客户端会读取位于用户主目录下的 ~/.ssh/config 文件。
-  
-  Host vir_linux  #Host:指定配置块适用的主机名或别名，为常用的服务器设置别名，从而简化 SSH 连接命令。例如，如果经常需要连接到 user@example.com，可以在 config 文件中设置一个别名 example，之后只需运行 ssh example 即可连接。
-  
-  HostName 192.168.65.113#指定实际的主机名或 IP 地址
-  
-  User linux #指定默认的用户名。
-  
-  IdentityFile ~/.ssh/id_rsa#指定使用的私钥文件路径
-  ```
-
-- **登录**
-
-  ```bash
-  ssh -i ~/.ssh/id_rsa linux@192.168.65.163
-  ```
-
-## 5.`SSH`传输文件
-
- scp（Secure Copy Protocol）是一个**基于 SSH（前提是安装了SSH服务）** 协议的命令行工具，用于在服务器之间或本地与远程服务器之间安全地复制文件和目录。它使用 SSH 加密传输数据，确保数据在传输过程中的安全性。
-
-```bash
-scp [选项] [源文件] [目标文件]
+file [option] 文件名
 	[option]
-		-r	#递归复制整个目录 
-		-P	#指定远程服务器的SSH端口（默认为 22）
-		-v	#启用详细模式，显示传输过程中的调试信息，有助于排查问题
-		-C	#启用压缩，对传输的文件进行压缩，适合大文件或低带宽网络
+		-b#省略文件名，只显示文件类型 
+		-f#指定一个文件，文件中包含要检查的文件名列表
+		-L#符号链接进行检查，而不是检查符号链接指向的文件
+		-z#尝试检查压缩文件的内容类型
+
+#假设有一个文件filelist.txt，内容如下:
+example.txt
+example.jpg
+example.mp3
+
+file -f filelist.txt
+
+example.txt: ASCII text
+example.jpg: JPEG image data, JFIF standard 1.01
+example.mp3: Audio file with ID3 version 2.2.0, contains: MPEG ADTS, layer III, v1, 128 kbps, 44.1 kHz, Stereo
 ```
 
-## 6.`SSH`密钥权限
+## 2.文档编辑
 
-安全性`SSH`服务器需要确保只有授权用户可以访问和修改 .ssh  目录和 authorized_keys  文件。如果这些文件的权限设置过于宽松，可能会导致安全漏洞，例如：
+### 1.文本编辑器
 
-- **未授权用户访问**
-  如果 .ssh 目录或 authorized_keys 文件的权限设置允许其他用户读取或写入，攻击者可能会篡改这些文件，从而获得未经授权的访问权限。
-- **中间人攻击**
-  如果 .ssh 目录的权限设置不正确，攻击者可能会在其中放置恶意文件，导致中间人攻击。
-- **权限检查机制**
-  SSH 服务器在处理公钥认证时，会检查 .ssh目录和 authorized_keys   文件的权限。具体要求如下：
-  **.ssh   目录**： 权限必须是 `XX0` （只有用户自己和同组用户可以读、写和执行）。其他用户不应有写权限，以防止未授权的修改。
-  **authorized_keys 文件**：权限必须是` XX0 `（只有用户自己和同组用户可以读和写）。其他用户不应有读或写权限，以防止未授权的访问和修改。
+```bash
+vi example.txt		#在shell模式下,键入vi及需要编辑的文件名,即可进入vi. 
 
-SSH 服务器对   .ssh   目录和   authorized_keys   文件的权限非常敏感，这是出于安全考虑。如果这些文件的权限设置不正确，SSH 服务器可能会拒绝公钥认证。通过确保   .ssh   目录的权限为`  XX0 `  和   `authorized_keys `  文件的权限为  `XX0`  ，可以避免这种问题。同时，确保这些文件的所有权属于正确的用户，以防止未授权的访问和修改。
+vi +5 example.txt	#如果需要在进入vi编辑界面后，将光标置于文件的第n行，则在vi命令后面加上“+n” 参数即可
+```
 
-## 7.默认密钥文件名的优先级
+### 2.显示文件内容
 
-SSH 客户端在尝试连接时，会按照以下顺序查找密钥文件：
+```bash
+cat /etc/sysconfig/network	#cat <FILENAME>,将文件内容合并到标准输出，即输出文件内容
+	[option]
+		-n #查看行号信息
+```
 
-- 通过` -i `参数指定的密钥文件名。
-- 在 `~/.ssh/config`文件中为特定主机配置的密钥文件。
-- 默认的密钥文件**名**，如` ~/.ssh/id_rsa`  , `~/.ssh/id_ecdsa`等。
+### 3.文件操作
 
-如果将自定义密钥文件直接放在 ~/.ssh 目录下，但没有通过` -i `参数或` ~/.ssh/config `文件明确指定，SSH 客户端不会自动使用该密钥文件，而是优先尝试默认的密钥文件名。
+```bash
+cp <SOURCE> <DEST>             #复制文件或文件夹
+	[option]    -r(--recusive) #递归拷贝子目录
+            	-f(--FORCE)    #强制拷贝，忽略提示信息
 
-## 8.参考链接
 
-[Windows下通过ssh连接Linux_如何进行ssh连接-CSDN博客](https://blog.csdn.net/G_66_hero/article/details/97971023)
+mv <SOURCE> <DEST>       #重命名或者移动文件或文件夹
 
-[Windows下生成ssh密钥，并用ssh免密访问Linux服务器_cmd生成ssh密钥-CSDN博客](https://blog.csdn.net/qq_43193386/article/details/120194085)
 
-------
+rm <FILENAME>			#删除文件               
+   [option]  -r          #递归删除删除文件夹以及文件夹里的东西		
+             -f          #不提示直接强制删除		
+             -i          #删除前提示是否删除   
+```
 
-# Linux
+### 4.批量编辑文本文件
 
-[Linux命令大全(手册) – 真正好用的Linux命令在线查询网站](https://www.linuxcool.com/)
+`sed`命令来自英文词组stream editor的缩写，其功能是利用语法/脚本对文本文件进行批量的编辑操作。sed命令最初由贝尔实验室开发，后被众多Linux系统集成，能够通过正则表达式对文件进行批量编辑，让重复性的工作不再浪费时间。
 
-## 1.`Linux`常用命令
+## 3.系统管理
 
-在Shell命令行中，空格是分隔命令参数的默认分隔符，所以当输入`cd 11 软件名`时bash会把它解析为两个参数:`11和软件名`，而不是一个完整的文件夹名`11 软件 `，解决办法就是用双引号括起成一个整体，或者给空格加反斜杠转义符。
+### 1.关机重启
 
-### 1.文件相关命令
+```bash
+sudo shutdown -h now/时间 [关机提示信息] #立即/定时关机
+sudo shutdown -r now/时间 [重启提示信息] #立即/定时重启
+sudo reboot                             #立即重启
+```
 
-- **创建文件**
+### 2.系统主机信息
 
-  ```bash
-  vi a.txt 				  #默认打开a.txt，没有则创建再打开
-  
-  touch <FILENAME>           #创建/打开文件并将文件最新修改时间更改为当前时间
-  ```
-  
-- **查找文件或目录**
+```bash
+uname -n #显示主机名
 
-  ```bash
-  find [搜索路径] [选项] [正则表达式]
-  	[选项]
-  		-name	#根据文件名查找		eg:find ./ -name = *.txt
-  		-type	#根据文件类型查找       eg:find -./ type = l
-  		-size	#根据文件大小查找-+n：大于 n   -n：小于 n     n：等于 n
-  		-maxdepth n #搜索目录递归的深度为n，省略默认全盘搜索
-  
-  #组合条件:查找当前目录及其子目录下所有属于用户 username 或大小大于 1MB 的文件
-  find . -type f \( -user username -o -size +1M \)
-  ```
+uname -r #显示内容核版本
 
-- **编辑文件**
+uname    #显示内核名，如Linux或者Unix
 
-  ```bash
-  vi example.txt		#在shell模式下,键入vi及需要编辑的文件名,即可进入vi. 
-  
-  vi +5 example.txt	#如果需要在进入vi编辑界面后，将光标置于文件的第n行，则在vi命令后面加上“+n” 参数即可
-  ```
+unmae -a #显示更加详细的信息
 
-- **查看文件内容**
+cat /etc/os-release  #查看操控操作系统发行版本
+```
 
-  ```bash
-  cat /etc/sysconfig/network	#cat <FILENAME>,将文件内容合并到标准输出，即输出文件内容
-  	[option]
-  		-n #查看行号信息
-  ```
+### 3.shell终端
 
-- **拷贝三件套**
+```bash
+clear             #清除终端所有打印的信息
 
-  ```bash
-  cp <SOURCE> <DEST>             #复制文件或文件夹
-  	[option]    -r(--recusive) #递归拷贝子目录
-              	-f(--FORCE)    #强制拷贝，忽略提示信息
-  
-  
-  mv <SOURCE> <DEST>       #重命名或者移动文件或文件夹
-  
-  
-  rm <FILENAME>			#删除文件               
-     [option]  -r          #递归删除删除文件夹以及文件夹里的东西		
-               -f          #不提示直接强制删除		
-               -i          #删除前提示是否删除   
-  ```
-  
-- **目录操作**
+history 		 #查询历史命令
 
-  ```bash
-  pwd		#显示当前工作区所在路径的绝对路径
-  
-  
-  ls -altr               	   #显示当前文件夹下的文件及文件夹
-  	[option]	-a		  #显示所有文件及文件夹，包括隐藏文件
-  			    -l		  #以列表，即显示文件名，大小，日期，权限等方式显示文件及文件夹
-  			    -t		  #按修改时间排序，最近修改的排第一
-  			    -r		  #如果进行排序，则倒序显
-  cd  [Directory]             #切换当前工作路径,缺省Directory默认回到home目录
-  
-  
-  mkdir <DIRECTORYNAME>      	   #创建文件夹        
-  	[option]    -p(--parent)   #级联创建文件夹
-  
-  
-  rmdir <DIRECTORYNAME>     	   #删除空目录        
-  	[option]    -p             #递归删除文件夹，先删子目录，之后若父目录也空则也删除，故p后面的路径要包含父目录名和子目录名  
-  ```
-  
-- **文件类型**
+!c       		 #执行上一个以c开头的命令
 
-  ```bash
-  file [option] 文件名
-  	[option]
-  		-b#省略文件名，只显示文件类型 
-  		-f#指定一个文件，文件中包含要检查的文件名列表
-  		-L#符号链接进行检查，而不是检查符号链接指向的文件
-  		-z#尝试检查压缩文件的内容类型
-  
-  #假设有一个文件filelist.txt，内容如下:
-  example.txt
-  example.jpg
-  example.mp3
-  
-  file -f filelist.txt
-  
-  example.txt: ASCII text
-  example.jpg: JPEG image data, JFIF standard 1.01
-  example.mp3: Audio file with ID3 version 2.2.0, contains: MPEG ADTS, layer III, v1, 128 kbps, 44.1 kHz, Stereo
-  ```
-  
-- **文件权限**
+!g      		 #执行上一个以g开头的命令，常为gcc
 
-  ```bash
-  umask             #获取系统当前权限掩码，文件实际权限为创建文件时赋予的权限-权限掩码
-  ```
-  
+table键  		#自动补齐
+```
 
-### 2.系统相关命令
+### 4.权限掩码
 
-- **关机重启**
+```bash
+umask             #获取系统当前权限掩码，文件实际权限为创建文件时赋予的权限-权限掩码
 
-  ```bash
-  sudo shutdown -h now/时间 [关机提示信息] #立即/定时关机
-  sudo shutdown -r now/时间 [重启提示信息] #立即/定时重启
-  sudo reboot                             #立即重启
-  ```
+umask 012 		# 设置新建文件权限默认为654（即666-umask）
+```
 
-- **系统主机信息**
+### 5.切换用户
 
-  ```bash
-  uname -n #显示主机名
-  
-  uname -r #显示内容核版本
-  
-  uname    #显示内核名，如Linux或者Unix
-  
-  unmae -a #显示更加详细的信息
-  
-  cat /etc/os-release  #查看操控操作系统发行版本
-  ```
+```bash
+su [-l]  <用户名>	#切换到目标用户，加-l(环境PATH也会变)，看$前面是~还是username，如果是~表示切换了当前用户且当前环境也是该用户的，否则只是切换了用户并未切换环境，环境没变，有些有权限的操作不能使用。
 
-- **终端**
+su -c <命令>  <用户名>	#切换到目标用户执行一下该命令再切换回当前用户
 
-  ```bash
-  clear             #清除终端所有打印的信息
-  
-  history 		 #查询历史命令
-  
-  !c       		 #执行上一个以c开头的命令
-  
-  !g      		 #执行上一个以g开头的命令，常为gcc
-  
-  table键  		#自动补齐
-  ```
+su - linuxprobe			#完全变更至指定的用户身份，省略用户名则默认为root
+exit                    #退出目标用户到自己的用户下
+```
 
-### 3.权限相关命令
+### 6.添加用户
 
-- **切换用户**
+```bash
+sudo adduser <用户名>                  #添加用户
+```
 
-  ```bash
-  su [-l]  <用户名>	#切换到目标用户，加-l(环境PATH也会变)，看$前面是~还是username，如果是~表示切换了当前用户且当前环境也是该用户的，否则只是切换了用户并未切换环境，环境没变，有些有权限的操作不能使用。
-  
-  su -c <命令>  <用户名>	#切换到目标用户执行一下该命令再切换回当前用户
-  
-  exit                    #退出目标用户到自己的用户下
-  ```
+### 7.修改用户密码
 
-- **添加用户**
+```bash
+sudo vi /etc/passwd                 #查看用户账户信息的文件
+#passwd字段格式
+#username:password:UID:GID:GECOS:home_directory:shell
+#GECOS:用户信息字段，通常包含用户的真实姓名、电话号码、房间号码等信息。该字段主要用于描述用户，但具体格式和内容可能因系统而异。
 
-  ```bash
-  sudo adduser <用户名>                  #添加用户
-  ```
+passwd                               #修改当前用户密码
 
-- **用户密码**
+sudo passwd <用户名>                  #修改指定用户名密码
+```
 
-  ```bash
-  sudo vi /etc/passwd                 #查看用户账户信息的文件
-  #passwd字段格式
-  #username:password:UID:GID:GECOS:home_directory:shell
-  #GECOS:用户信息字段，通常包含用户的真实姓名、电话号码、房间号码等信息。该字段主要用于描述用户，但具体格式和内容可能因系统而异。
-  
-  passwd                               #修改当前用户密码
-  
-  sudo passwd <用户名>                  #修改指定用户名密码
-  ```
+### 8.用户权限
 
-- **用户权限**
+```bash
+vi      /etc/group                    #查看组
 
-  ```bash
-  vi      /etc/group                    #查看组
-  
-  chmod <八进制> <FILENAME>              #修改文件权限
-  
-  chmod [u | g | o | a(all)]  [+ | - | =]  [r | w | x] <FILENAME>
-  ```
+chmod <八进制> <FILENAME>              #修改文件权限
 
-### 4.网络相关命令
+chmod [u | g | o | a(all)]  [+ | - | =]  [r | w | x] <FILENAME>
+```
 
-- **网络测速**
+## 4.网络相关命令
 
-  ```bash
-  iperf3 -s #在服务器上运行,这将启动一个监听默认端口（5201）的服务器
-  
-  iperf3 -c <服务器IP地址>	#在客户端运行,这将连接到服务器并开始测试
-  
-  [option]
-  	-p	#port:指定端口号（默认为 5201）。
-  	-t	#time:设置测试持续时间（默认为 10 秒）。
-  	-i	#interval:设置报告间隔时间。
-  	-P	#启用并发连接数。
-  	-u	#UDP:使用 UDP 协议进行测试。
-  	-b	#bind width在 UDP 测试中指定目标带宽。
-  	
-  iperf3 -c 192.168.1.100 -u -b 10M#这将使用 UDP 协议，目标带宽为 10 Mbps
-  
-  
-  Connecting to host localhost, port 5201
-  [  5] local 127.0.0.1 port 33898 connected to 127.0.0.1 port 5201
-  [ ID] Interval           Transfer     Bitrate         Retr  Cwnd
-  [  5]   0.00-1.00   sec  4.06 GBytes  34.8 Gbits/sec    0   3.12 MBytes       
-  [  5]   1.00-2.00   sec  4.07 GBytes  35.0 Gbits/sec    0   3.43 MBytes       
-  [  5]   2.00-3.00   sec  4.07 GBytes  34.9 Gbits/sec    0   3.43 MBytes       
-  [  5]   3.00-4.00   sec  4.04 GBytes  34.7 Gbits/sec    0   3.43 MBytes   
-  ```
+### 1.网络测速
+
+```bash
+iperf3 -s #在服务器上运行,这将启动一个监听默认端口（5201）的服务器
+
+iperf3 -c <服务器IP地址>	#在客户端运行,这将连接到服务器并开始测试
+
+[option]
+	-p	#port:指定端口号（默认为 5201）。
+	-t	#time:设置测试持续时间（默认为 10 秒）。
+	-i	#interval:设置报告间隔时间。
+	-P	#启用并发连接数。
+	-u	#UDP:使用 UDP 协议进行测试。
+	-b	#bind width在 UDP 测试中指定目标带宽。
+	
+iperf3 -c 192.168.1.100 -u -b 10M#这将使用 UDP 协议，目标带宽为 10 Mbps
+
+
+Connecting to host localhost, port 5201
+[  5] local 127.0.0.1 port 33898 connected to 127.0.0.1 port 5201
+[ ID] Interval           Transfer     Bitrate         Retr  Cwnd
+[  5]   0.00-1.00   sec  4.06 GBytes  34.8 Gbits/sec    0   3.12 MBytes       
+[  5]   1.00-2.00   sec  4.07 GBytes  35.0 Gbits/sec    0   3.43 MBytes       
+[  5]   2.00-3.00   sec  4.07 GBytes  34.9 Gbits/sec    0   3.43 MBytes       
+[  5]   3.00-4.00   sec  4.04 GBytes  34.7 Gbits/sec    0   3.43 MBytes   
+```
 
 - **建立TCP/UDP连接**
 
@@ -1087,12 +914,12 @@ echo "hello world" #命令、选项与参数之间必须用空格隔开。
 
 ## 2.shell变量
 
-### 变量分类
+### 1.变量分类
 
 - 自定义变量
 - 特殊变量：环境变量，只读变量，位置变量，预定义变量
 
-### 变量特性
+### 2.变量特性
 
 - 在shell编程中的变量通常使用全大写。
 - 在变量前加$来引用变量的值
@@ -1289,9 +1116,11 @@ if [ = "clean" ]; then
 
 ## 7.分支语句
 
-注意：在算术运算，比大小，判断条件里的[ ]，**命令与参数之间需要加空格**。因为shell脚步的本质还是一些shell命令，shell命令对空格很敏感。
+> [!CAUTION]
+>
+> 在算术运算，比大小，判断条件里的[ ]，**命令与参数之间需要加空格**。因为shell脚步的本质还是一些shell命令，shell命令对空格很敏感。因为Shell命令的空格是用来区分命令和选项的。
 
-### 单路分支
+### 1.单路分支
 
 then后面跟符合条件之后执行的程序，可以放在[]之后，用“;”分割。也可以换行写入，就不需要“;”了。
 
@@ -1383,7 +1212,13 @@ $* :一个整体 ？？
 $@:挨个打印？？
 ```
 
+# 注意事项
 
+在Shell命令行中，空格是分隔命令参数的默认分隔符，所以当输入`cd 11 软件名`时bash会把它解析为两个参数:`11和软件名`，而不是一个完整的文件夹名`11 软件 `，解决办法就是用双引号括起成一个整体，或者给空格加反斜杠转义符。
+
+# 工具网站
+
+[Linux命令大全(手册) – 真正好用的Linux命令在线查询网站](https://www.linuxcool.com/)
 
 # AutoMake
 

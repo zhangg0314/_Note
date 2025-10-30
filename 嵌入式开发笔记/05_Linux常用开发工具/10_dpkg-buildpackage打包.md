@@ -1,8 +1,8 @@
 # 概念介绍
 
-​	`dpkg-buildpackage` 是 `Debian/Ubuntu` 系统中用于构建软件包的核心工具，它会调用一系列底层工具（如 `dpkg-deb`、`dpkg-gencontrol`）来自动生成 `.deb` 软件包。`.deb`软件包相当于 Windows 中的 **`.msi` 或 `.exe` 安装文件**。
+`dpkg-buildpackage` 是 `Debian/Ubuntu` 系统中用于构建软件包的核心工具，它会调用一系列底层工具（如 `dpkg-deb`、`dpkg-gencontrol`）来自动生成 `.deb` 软件包。`.deb`软件包相当于 Windows 中的 **`.msi` 或 `.exe` 安装文件**。
 
-​	开发者只需要运行 `dpkg-buildpackage` 这一个命令，就能自动完成从 “源代码” 到 “可安装 `.deb` 包” 的全流程，其执行流程大致如下：
+开发者只需要运行 `dpkg-buildpackage` 这一个命令，就能自动完成从 “源代码” 到 “可安装 `.deb` 包” 的全流程，其执行流程大致如下：
 
 1. 检查打包目录是否符合规范（比如有没有 `debian/` 目录和必要文件）。
 2. 调用编译工具（如 `make`）将源代码编译成二进制文件。
@@ -27,22 +27,22 @@
 
 # 关键配置文件
 
-`dpkg-buildpackage`命令的执行依赖 `debian/` 目录下的多个配置文件：
+``命令的执行依赖 `debian/` 目录下的多个配置文件：
+
+[第 4 章 debian 目录中的必需内容](https://www.debian.org/doc/manuals/maint-guide/dreq.zh-cn.html)
 
 1. **`control`**
    描述包的元数据（名称、版本、依赖、描述等）：
 
-   [第 4 章 debian 目录中的必需内容](https://www.debian.org/doc/manuals/maint-guide/dreq.zh-cn.html)
-
    ```plaintext
-   Source: myproject
+   Source: myproject #源代码包的名称
    Section: utils
    Priority: optional
    Maintainer: Your Name <your_email@example.com>
    Build-Depends: debhelper (>= 13), build-essential
    ...
    ```
-
+   
 2. **`rules`**
    控制编译和安装过程的 Makefile 脚本：
 
@@ -75,7 +75,7 @@
    bin/myproject usr/bin/
    ```
 
-# 5.常用命令示例
+# 常用命令示例
 
 1. **构建二进制包（不签名）**
 
@@ -152,7 +152,7 @@
 
 简单说，核心区别就是：**原生包是 Debian “土生土长” 的，非原生包是 “外来户” 被 Debian 重新包装的**。
 
-# ——执行流程——
+# 打包执行流程
 
 # 1.安装依赖
 
