@@ -180,3 +180,9 @@ SSH 客户端在尝试连接时，会按照以下顺序查找密钥文件：
 [Windows下通过ssh连接Linux_如何进行ssh连接-CSDN博客](https://blog.csdn.net/G_66_hero/article/details/97971023)
 
 [Windows下生成ssh密钥，并用ssh免密访问Linux服务器_cmd生成ssh密钥-CSDN博客](https://blog.csdn.net/qq_43193386/article/details/120194085)
+
+
+
+# —— samba——
+
+[Windows上将linux目录映射网络驱动器 - liqinglucky - 博客园 (cnblogs.com)](https://www.cnblogs.com/liqinglucky/p/samba.html)
