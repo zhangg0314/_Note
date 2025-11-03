@@ -2,9 +2,9 @@
 
 `dpkg-buildpackage` 是 `Debian/Ubuntu` 系统中用于构建软件包的核心工具，它会调用一系列底层工具（如 `dpkg-deb`、`dpkg-gencontrol`）来自动生成 `.deb` 软件包。`.deb`软件包相当于 Windows 中的 **`.msi` 或 `.exe` 安装文件**。
 
-开发者只需要运行 `dpkg-buildpackage` 这一个命令，就能自动完成从 “源代码” 到 “可安装 `.deb` 包” 的全流程，其执行流程大致如下：
+开发者只需要运行 `dpkg-buildpackage` 这一个命令，就能自动完成从 “源代码” 到 “可安装`.deb`包” 的全流程，其执行流程大致如下：
 
-1. 检查打包目录是否符合规范（比如有没有 `debian/` 目录和必要文件）。
+1. 检查打包目录是否符合规范（比如当前目录下有没有`debian/`目录和必要文件）。
 2. 调用编译工具（如 `make`）将源代码编译成二进制文件。
 3. 生成各种元数据文件（如 `control`、`md5sums`）。
 4. 调用 `dpkg-deb` 把所有文件打包成 `.deb`。
@@ -20,55 +20,148 @@
    支持交叉编译（如在` x86` 机器上为 ARM 架构构建包）。
 3. **签名与验证**
    支持使用` GPG `对生成的包进行数字签名，确保完整性。
+   
+   ```shell
+   #软件包的签名与认证核心是验证软件完整性和来源合法性的安全机制。
+   1.核心定义
+   	软件包签名：开发者用私钥对软件包数据（或其哈希值）加密生成 “签名文件”，随软件包一同发布。
+   	软件包认证：用户 / 系统用开发者公开的公钥，解密签名并校验，确认软件未被篡改且来自合法开发者。
+   2.关键作用
+   	防篡改：确保软件下载或传输过程中，没有被植入恶意代码、替换文件等。
+   	验来源：确认软件确实来自声称的开发者，避免下载到仿冒、恶意软件。
+   	抗抵赖：开发者无法否认自己发布过该版本的软件包。
+   3.简单流程
+   	开发者：生成密钥对（私钥 + 公钥），用私钥给软件包签名，发布软件包 + 签名文件 + 公钥。
+   	用户 / 系统：获取后用公钥解密签名，同时计算软件包的哈希值，对比解密结果与哈希值是否一致，一致则认证通过。
+   ```
 4. **依赖检查**
    自动检查并处理构建依赖（如所需的开发库）。如果开发者的电脑上没有 `libssl` 开发版（编译时需要），工具会报错，提醒开发者安装；生成的 `.deb` 包会包含依赖信息，用户安装时，系统会自动帮其先装上 `libssl`，再装程序。
 
 ------
 
-# 关键配置文件
+# 配置文件
 
-``命令的执行依赖 `debian/` 目录下的多个配置文件：
+[第 4 章 debian 目录中的必需内容](https://www.debian.org/doc/manuals/maint-guide/dreq.zh-cn.html)。命令的执行依赖 `debian/` 目录下的多个配置文件：
 
-[第 4 章 debian 目录中的必需内容](https://www.debian.org/doc/manuals/maint-guide/dreq.zh-cn.html)
+## 1.changelog文件
 
-1. **`control`**
-   描述包的元数据（名称、版本、依赖、描述等）：
+这是一个**必须的**文件，用以解析版本号信息、适用的发行版和紧急程度。对于你而言，详细描述你所做出的更改也是很好且很重要的。它将帮助下载你的软件包的人了解这个软件包中是否有他们需要知道的事情。它会被作为 `/usr/share/doc/termsg/changelog.Debian.gz` 保存在二进制包中。**dh_make** 创建了一个默认的文件，这是它的容貌：
 
-   ```plaintext
-   Source: myproject #源代码包的名称
-   Section: utils
-   Priority: optional
-   Maintainer: Your Name <your_email@example.com>
-   Build-Depends: debhelper (>= 13), build-essential
-   ...
-   ```
-   
-2. **`rules`**
-   控制编译和安装过程的 Makefile 脚本：
+```
+1  termsg (1.0.0) UNRELEASED; urgency=medium
+2
+3   * Initial release.
+4
+5  -- linux <your.email@example.com>  Mon, 03 Nov 2025 09:26:37 +0800
+6
+```
 
-   ```makefile
-   %:
-       dh $@
-   
-   override_dh_auto_configure:
-       ./configure --prefix=/usr
-   ```
+第 1 行是软件包名、版本号、发行版和紧急程度。软件包名必须与实际的源代码包名相同，发行版应该是 `unstable`。除非有特殊原因，紧急程度默认设置为 medium（中等）。
 
-3. **`changelog`**
-   记录包的版本变更历史：
+第 3-5 行是一个很长的条目，记录了你在这个 Debian 修订版本中做出的修改(非上游修改——上游修改由上游作者创建并由另外一个文件维护，它们应被安装为 `/usr/share/doc/gentoo/changelog.gz`)。假设你的 ITP (Intent To Package，计划打包)的 Bug 号为 `12345`。新行必须插入在上一个以星号 `*` 开头的行的正下方。为了阻止软件包在打包完成之前被意外上传，将发行版值改成一个不可用的 `UNRELEASED` 将是一个很好的选择。最后它会成为以下的样子：
 
-   ```plaintext
-   myproject (1.0-1) unstable; urgency=medium
-   
-     * Initial release.
-   
-    -- Your Name <your_email@example.com>  Mon, 1 Jan 2024 12:00:00 +0000
-   ```
+```
+1  termsg (1.0.0) UNRELEASED; urgency=medium
+2
+3   * Initial release.
+4   * This is my first Debian package.
+5   * Adjusted the Makefile to fix $(DESTDIR) problems.
+6
+7  -- linux <your.email@example.com>  Mon, 03 Nov 2025 09:26:37 +0800
+```
 
-4. **`copyright`**
-   软件版权和许可证信息。
+## 2.control文件
 
-5. **`install`**
+### 1.作用介绍
+
+描述软件包的元数据如名称（Package），版本（Version），描述（Description）等，是deb包必须具备的描述性文件，以便于软件的安装管理和索引。
+
+### 2.一键生成
+
+control文件非首次编包，一般都会存在，若没有该文件可以通过下面命令进行生成：
+
+```shell
+dh_make -e 邮箱地址   -f  ../xxx.tar.gz
+```
+
+### 3.具体字段介绍
+
+[Ubuntu系统下deb包中control文件详解_deb control-CSDN博客](https://blog.csdn.net/Luckiers/article/details/118277548)
+
+```shell
+Source: termsg #源代码包的名称，如果软件包名称有两个词，用一个连字符（-）把它们连起来。软件包的名称只能有小写的英文字母，数字以及"+"和"-"
+
+Section: application #该源码包要进入发行版本的分类，即列出软件属于的类别，可能的值包括admin（管理），games（游戏），gnome，kde，mail（电子邮件），misc（杂项）<注：misc是miscellaneous的简称>，net（网络），sound（声音），text（文本），utils（实用工具）和web（万维网），main（自由软件）、non-free（非自由软件）、contrib（依赖非自由软件的自由软件）。
+
+Priority: extra  #描述用户安装此软件包的优先级，optional 优先级适用于与优先级为 required、important 或 standard 的软件包不冲突的新软件包。extra 优先级适用于与其他非 extra 优先级软件包冲突的新软件包。
+
+Maintainer: users <users@sohu.com> # 维护者的姓名和邮箱
+
+Build-Depends: debhelper (>= 7), autotools-dev #编译依赖，可以用dpkg-depcheck -d ./configure查看
+
+Standards-Version: 3.7.3 #此软件包的标准版本号
+Homepage: <insert the upstream URL, if relevant>
+
+Package: termsg #二进制的包名
+Section: application
+Architecture: any #软件包架构，标明该软件包适用于何种cpu架构，all表明不需要根据架构做区分，编译生成一个软件包即可；any表示四种cpu架构需要分别编译会生成四个软件包；amd64，i386，armhf，arm64表示适用于该种cpu架构
+Depends: ${shlibs:Depends}, ${misc:Depends} #依赖的软件包，当这些软件包都安装好后这个软件包才可安装
+Pre-Depends：#依赖性强于Depends项中的软件包，必须正确配置后才可安装，慎用
+Suggests：#建议安装的软件包
+Conflicts：#冲突的软件包，当这些软件包卸载完后才可安装
+Breaks：#安装本软件包后会损坏的软件包
+Replaces：#替换的软件包
+Description: package of terminal #二进制包的描述
+ The packages is pub dbmanage meterpro pppd comm measure dataproc taskmetering gather nproparse menu sysconfig softroute.
+```
+
+## 3.compat文件
+
+该文件定义了`debhelper`的兼容级别。目前应当使用如下方法将其设置为`debhelper` V10：
+
+```shell
+$ echo 7 > debian/compat #Build-Depends: debhelper (>= 7), autotools-dev
+```
+
+在特定场景下，可以在需要兼容旧版本系统时使用兼容等级9。然而，不建议使用任何低于 9 的兼容等级，在新建软件包时也应避免使用这些低的等级。
+
+## 4.copyright文件
+
+这个文件包含了上游软件的版权以及许可证信息，软件版权和许可证信息。
+
+## 5.rules文件
+
+### 1.介绍及实例
+
+[系列二 详解 debian/rules | DeepinWiki](https://wiki.deepin.org/zh/待分类/02_按软件功能划分/02_开发人员常用软件介绍/01_编程开发/打包工具/相关内容/Debian发行版基础系列/详解debian_rules)
+
+将编译安装转化为一个简单的rules文件来完成打包, rules文件一般会包含，”binary-arch”, ”binary-indep”, ”binary”，”build”, ”clean”, ”install”, 等targets，参考如下例子:
+
+```makefile
+%:
+    dh $@#编写debian/rules依然是重复机械的体力劳动，最新版本的 dh_make 会使用默认的dh $@ 来进一步简化rules文件的编写
+
+
+#当默认执行的dh命令，不能满足所有软件包的编译安装，我们可以通过 override_来重新定义dh命令，示例如下
+override_dh_auto_configure:
+    ./configure --prefix=/usr
+```
+
+### 2.dh命令简要解析
+
+dh是`debhelper`包中的命令序列，dh开头的命令主要用于简化rules文件的编写，把一些通用的重复的操作用perl命令来代替。下面是部分dh命令和实际对应执行的操作的简要介绍：
+
+```shell
+dh_auto_clean           make distclean
+dh_auto_configure       ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=/var ...
+dh_auto_build           make
+dh_auto_test            make test
+dh_auto_install         make install DESTDIR=/path/to/package_version-revision/debian/package
+```
+
+
+
+1. **`install`**
    指定文件安装位置：
 
    ```plaintext
@@ -152,133 +245,9 @@
 
 简单说，核心区别就是：**原生包是 Debian “土生土长” 的，非原生包是 “外来户” 被 Debian 重新包装的**。
 
-# 打包执行流程
+# 
 
-# 1.安装依赖
-
-```bash
-apt install build-essential binutils lintian debhelper dh-make devscripts
-```
-
-# 2.项目目录
-
-## 1.目录结构
-
-一个典型的 `Debian` 包项目结构如下：
-
-```bash
-myproject/
-├── debian/                  # Debian 包控制文件目录
-│   ├── 【changelog】#用于记录软件包的版本变更历史，包括每个版本的更新内容、发布时间、维护者					 信息等。它不仅是给用户看的 “更新日志”，也是 dpkg、debhelper 等工具识别				   版本号、构建包的关键依据。
-|	├── compat
-|	├── control
-|	├── copyright
-|	├── init.d.ex#让系统通过 service myapp start/stop/restart 等命令控制 myapp 服务。				它是 /etc/init.d/ 目录下的服务控制脚本，用于定义 myapp 如何启动、停止、				  重启等。
-|	├── manpage.1.ex#手册页是 Linux 系统中标准的帮助文档（通过 man 程序名 查看），这个示					例文件提供了手册页的基本格式，用于说明 myapp 的功能、用法和参数。
-|	├── manpage.sgml.ex
-|	├── manpage.xml.ex#生成的手册页示例文件，作用和 manpage.1.ex 一致 —— 都是为了生成程序					 的手册页（manpage），只是编写格式不同。
-|	├── menu.ex#这个文件用于在 Linux 桌面环境的应用菜单中添加 myapp 的启动项（比如在 “应用				程序” 菜单中显示一个可点击的图标或条目）
-|	├── myapp.cron.d.ex#作用是定义软件包 myapp 需要的定时任务。
-|	├── myapp.default.ex#集中管理服务的启动参数（如 DAEMON_OPTS="-v --config 							 /etc/myapp.conf"），避免硬编码到 init.d 脚本中。用户可通过修改 					  /etc/default/myapp 自定义服务启动选项，无需改 init.d 脚本。
-|	├── myapp.doc-base.EX
-|	├── myapp-docs.docs #app文档说明相关
-|	├── postinst.ex#创建 myapp 用户，启动服务（systemctl start myapp），并设置开机自启		（systemctl enable myapp）。
-|	├── postrm.ex#删除 myapp 用户，清理 /var/run/myapp 临时目录，移除自启配置				（systemctl disable myapp）。
-|	├── preinst.ex#检查是否已安装依赖的 libxxx 库，若未安装则报错阻止安装
-|	├── prerm.ex#停止正在运行的 myapp 服务（systemctl stop myapp），避免文件被占用。
-		#用于在软件包的安装、升级、卸载过程中自动执行特定操作（比如配置服务、创建用户、清理		  文件等）。这四个脚本按执行顺序和场景分工，核心作用是 “衔接软件包生命周期的关键节		  点，确保安装 / 卸载过程平滑且符合系统规范”。
-|	├── README.Debian#文件是打包者与用户的 “沟通桥梁”，用于补充 Debian 系统下的软件					     使用细节，让用户更方便地使用包。如果不需要可以删除。
-|	├── README.source#这个文件用于描述源代码包的信息（比如源代码的获取方式、补丁的应用说						明、特殊构建流程等），遵循 Debian 政策手册第 4.14节的规范。如果不需					要可以删除。
-|	├── rules
-|	├── source
-│   |	└── format
-|	|── watch.ex#用于配合 uscan 工具监控上游（upstream）软件的新版本更新。简单说，它的作用				是：自动检查软件（比如 myapp）的上游开发者是否发布了新版本，方便及时更新 			   Debian 包。
-│   ├── install              # 文件安装位置说明
-│   └── [其他可选文件]        # 如triggers, conffiles等
-├── src/                     # 源代码目录（可选）
-└── [其他项目文件]
-```
-
-## 2.目录格式
-
-### 1.默认情况
-
-`dh_make`设计上默认通过**当前目录的名称**推断包名（package name）和版本号（version），因此要求项目目录名必须遵循格式：
-
-```shell
-<package-name>-<version>
-#例如：myapp-1.0.0、utils-2.3
-#如果项目目录名为myapp-1.0.0，执行dh_make命令时会自动将包名设为myapp，版本设为1.0.0，无需额外参数。
-```
-
-- **包名（package name）**
-  目录名中 `-` 前面的部分（如 `myapp`）
-- **版本号（version）**
-  目录名中 `-` 后面的部分（如 `1.0.0`）
-
-如果目录名不符合这个格式（比如 `myapp_v1.0`、`test`、`1.0-myapp` 等），在直接执行`dh_make` 命令时就无法识别包名和版本号，从而抛出 **目录名无效** 的错误。
-
-```shell
-For dh_make to find the package name and version, the current directory
-needs to be in the format of <package>-<version>.  Alternatively use the
-_-p flag using the format <name>_<version> to override it.
-The directory name you have specified is invalid!
-
-Your current directory is:
-/home/zhangg/dpkg
-Perhaps you could try going to directory where the sources are?
-
-Please note that this change is necessary ONLY during the initial
-Debianization with dh_make.  When building the package, dpkg-source
-will gracefully handle almost any upstream tarball.
-```
-
-### 2.带参数自定义
-
-根据前面的出错提示也可以看到，也可以使用 `-p` 标志并按照 `<名称>_<版本>` 的格式来覆盖重命名它。如果不想重命名目录，可以通过 `-p` 选项手动指定包名和版本，格式为 `<package-name>_<version>`（注意这里用下划线 `_` 分隔，而非目录名中的 `-`）：
-
-```bash
-# 假设当前目录名为myproject，手动指定包名为myapp，版本为1.0.0
-dh_make -s -y -e your_email@example.com -p myapp_1.0.0
-
-#-p后面的参数格式是包名_版本号（必须用下划线），例如utils_2.3、tools-extra_0.9.1（包名允许包含 `-`，但版本号中通常不建议)。
-```
-
-## 3.安装、卸载脚本
-
-通俗举例：以一个 `myapp` 服务为例
-
-假设 `myapp` 是一个后台服务，这四个脚本的执行流程和内容可能如下：
-
-1. **安装 `myapp` 时**：
-
-   - `preinst`：检查是否已安装依赖的 `libxxx` 库，若未安装则报错阻止安装。
-   - `postinst`：创建 `myapp` 用户，启动服务（`systemctl start myapp`），并设置开机自启（`systemctl enable myapp`）。
-
-2. **卸载 `myapp` 时**：
-
-   - `prerm`：停止正在运行的 `myapp` 服务（`systemctl stop myapp`），避免文件被占用。
-   - `postrm`：删除 `myapp` 用户，清理 `/var/run/myapp` 临时目录，移除自启配置（`systemctl disable myapp`）。
-
-3. **升级 `myapp` 到新版本时**：
-
-   - 新版 `preinst`：备份旧配置文件（`/etc/myapp.conf` 到 `/etc/myapp.conf.bak`）。
-   - 旧版 `prerm`：停止旧版本服务。
-   - 新版 `postinst`：合并旧配置到新文件，启动新版本服务。
-   - 旧版 `postrm`：清理旧版本残留的临时文件。
-
-## 4.日志版本号编写
-
-**推荐工具**：用 `dch` 命令自动生成 / 更新 `changelog`，避免手动写格式出错：
-
-```bash
-dch -i  # 增加一个 Debian 修订号（如 1.0.0-1 → 1.0.0-2）
-dch -v 1.1.0-1  # 直接指定新版本号（如升级上游版本到 1.1.0）
-```
-
-------
-
-# 3.生成`Debian/`目录
+# 生成`Debian/`目录
 
 ## 1.命令介绍
 
@@ -294,7 +263,7 @@ dh_make [选项] [包版本]
 
 ```bash
 cd myproject/
-dh_make --single --native -e your.email@example.com -p myapp_1.0.0
+dh_make --single --native -e your.email@example.com -p termsg_1.0.0
 ```
 
 ### 2.核心选项详解
@@ -396,15 +365,133 @@ dh_make --cmake -e your.email@example.com
 3. **与 `debhelper` 配合**
 
    - `dh_make生成的`rules`文件依赖
-     
+
    - `debhelper`需要确保系统已安装
-   
+
      ```bash
       sudo apt install debhelper
      ```
 
 
 通过 `dh_make`，可以快速搭建 `Debian` 包的基础结构，然后专注于定制特定的打包规则和元数据。这大大降低了手动编写复杂控制文件的门槛。
+
+# 项目目录
+
+## 1.目录结构
+
+一个典型的 `Debian` 包项目结构如下：
+
+```bash
+myproject/
+├── debian/# Debian 包控制文件目录
+│   ├── 【changelog】#用于记录软件包的版本变更历史，包括每个版本的更新内容、发布时间、维护者信息等。它不仅是给用户看的 “更新日志”，也是 dpkg、debhelper 等工具识别版本号、构建包的关键依据。
+|	├── compat
+|	├── control
+|	├── copyright
+|	├── init.d.ex#让系统通过 service myapp start/stop/restart 等命令控制 myapp 服务。				它是 /etc/init.d/ 目录下的服务控制脚本，用于定义 myapp 如何启动、停止、				  重启等。
+|	├── manpage.1.ex#手册页是 Linux 系统中标准的帮助文档（通过 man 程序名 查看），这个示					例文件提供了手册页的基本格式，用于说明 myapp 的功能、用法和参数。
+|	├── manpage.sgml.ex
+|	├── manpage.xml.ex#生成的手册页示例文件，作用和 manpage.1.ex 一致 —— 都是为了生成程序					 的手册页（manpage），只是编写格式不同。
+|	├── menu.ex#这个文件用于在 Linux 桌面环境的应用菜单中添加 myapp 的启动项（比如在 “应用				程序” 菜单中显示一个可点击的图标或条目）
+|	├── myapp.cron.d.ex#作用是定义软件包 myapp 需要的定时任务。
+|	├── myapp.default.ex#集中管理服务的启动参数（如 DAEMON_OPTS="-v --config 							 /etc/myapp.conf"），避免硬编码到 init.d 脚本中。用户可通过修改 					  /etc/default/myapp 自定义服务启动选项，无需改 init.d 脚本。
+|	├── myapp.doc-base.EX
+|	├── myapp-docs.docs #app文档说明相关
+|	├── postinst.ex#创建 myapp 用户，启动服务（systemctl start myapp），并设置开机自启		（systemctl enable myapp）。
+|	├── postrm.ex#删除 myapp 用户，清理 /var/run/myapp 临时目录，移除自启配置				（systemctl disable myapp）。
+|	├── preinst.ex#检查是否已安装依赖的 libxxx 库，若未安装则报错阻止安装
+|	├── prerm.ex#停止正在运行的 myapp 服务（systemctl stop myapp），避免文件被占用。
+		#用于在软件包的安装、升级、卸载过程中自动执行特定操作（比如配置服务、创建用户、清理		  文件等）。这四个脚本按执行顺序和场景分工，核心作用是 “衔接软件包生命周期的关键节		  点，确保安装 / 卸载过程平滑且符合系统规范”。
+|	├── README.Debian#文件是打包者与用户的 “沟通桥梁”，用于补充 Debian 系统下的软件使用细节，让用户更方便地使用包。如果不需要可以删除。
+|	├── README.source#这个文件用于描述源代码包的信息（比如源代码的获取方式、补丁的应用说						明、特殊构建流程等），遵循 Debian 政策手册第 4.14节的规范。如果不需					要可以删除。
+|	├── rules
+|	├── source
+│   |	└── format
+|	|── watch.ex#用于配合 uscan 工具监控上游（upstream）软件的新版本更新。简单说，它的作用				是：自动检查软件（比如 myapp）的上游开发者是否发布了新版本，方便及时更新 			   Debian 包。
+│   ├── install              # 文件安装位置说明
+│   └── [其他可选文件]        # 如triggers, conffiles等
+├── src/                     # 源代码目录（可选）
+└── [其他项目文件]
+```
+
+## 2.目录格式
+
+### 1.默认情况
+
+`dh_make`设计上默认通过**当前目录的名称**推断包名（package name）和版本号（version），因此要求项目目录名必须遵循格式：
+
+```shell
+<package-name>-<version>
+#例如：myapp-1.0.0、utils-2.3
+#如果项目目录名为myapp-1.0.0，执行dh_make命令时会自动将包名设为myapp，版本设为1.0.0，无需额外参数。
+```
+
+- **包名（package name）**
+  目录名中 `-` 前面的部分（如 `myapp`）
+- **版本号（version）**
+  目录名中 `-` 后面的部分（如 `1.0.0`）
+
+如果目录名不符合这个格式（比如 `myapp_v1.0`、`test`、`1.0-myapp` 等），在直接执行`dh_make` 命令时就无法识别包名和版本号，从而抛出 **目录名无效** 的错误。
+
+```shell
+For dh_make to find the package name and version, the current directory
+needs to be in the format of <package>-<version>.  Alternatively use the
+_-p flag using the format <name>_<version> to override it.
+The directory name you have specified is invalid!
+
+Your current directory is:
+/home/zhangg/dpkg
+Perhaps you could try going to directory where the sources are?
+
+Please note that this change is necessary ONLY during the initial
+Debianization with dh_make.  When building the package, dpkg-source
+will gracefully handle almost any upstream tarball.
+```
+
+### 2.带参数自定义
+
+根据前面的出错提示也可以看到，也可以使用 `-p` 标志并按照 `<名称>_<版本>` 的格式来覆盖重命名它。如果不想重命名目录，可以通过 `-p` 选项手动指定包名和版本，格式为 `<package-name>_<version>`（注意这里用下划线 `_` 分隔，而非目录名中的 `-`）：
+
+```bash
+# 假设当前目录名为myproject，手动指定包名为myapp，版本为1.0.0
+dh_make -s -y -e your_email@example.com -p myapp_1.0.0
+
+#-p后面的参数格式是包名_版本号（必须用下划线），例如utils_2.3、tools-extra_0.9.1（包名允许包含 `-`，但版本号中通常不建议)。
+```
+
+## 3.安装、卸载脚本
+
+通俗举例：以一个 `myapp` 服务为例
+
+假设 `myapp` 是一个后台服务，这四个脚本的执行流程和内容可能如下：
+
+1. **安装 `myapp` 时**：
+
+   - `preinst`：检查是否已安装依赖的 `libxxx` 库，若未安装则报错阻止安装。
+   - `postinst`：创建 `myapp` 用户，启动服务（`systemctl start myapp`），并设置开机自启（`systemctl enable myapp`）。
+
+2. **卸载 `myapp` 时**：
+
+   - `prerm`：停止正在运行的 `myapp` 服务（`systemctl stop myapp`），避免文件被占用。
+   - `postrm`：删除 `myapp` 用户，清理 `/var/run/myapp` 临时目录，移除自启配置（`systemctl disable myapp`）。
+
+3. **升级 `myapp` 到新版本时**：
+   - 新版 `preinst`：备份旧配置文件（`/etc/myapp.conf` 到 `/etc/myapp.conf.bak`）。
+   - 旧版 `prerm`：停止旧版本服务。
+   - 新版 `postinst`：合并旧配置到新文件，启动新版本服务。
+   - 旧版 `postrm`：清理旧版本残留的临时文件。
+
+## 4.日志版本号编写
+
+**推荐工具**：用 `dch` 命令自动生成 / 更新 `changelog`，避免手动写格式出错：
+
+```bash
+dch -i  # 增加一个 Debian 修订号（如 1.0.0-1 → 1.0.0-2）
+dch -v 1.1.0-1  # 直接指定新版本号（如升级上游版本到 1.1.0）
+```
+
+
+
 
 ## 2.命令执行
 
@@ -796,7 +883,34 @@ dpkg-buildpackage [选项]
 - **正式发布**（可选）
   若需分发，可使用 `GPG` 签名包（`dpkg-buildpackage` 不加 `-us -uc`），然后上传到 `Debian` 仓库或自己的源。
 
-------
 
-# 
+
+# 打包流程总结
+
+## 1.上游包
+
+1. 安装相关依赖
+2. 
+
+[Debian Sources | Debian Sources](https://sources.debian.org/)
+
+```shell
+ git clone https://salsa.debian.org/toolchain-team/elfutils.git#基于debian官网的软件包修改而来
+```
+
+## 2.原生包
+
+1. 安装相关依赖
+
+   ```shell
+   sudo apt-get install build-essential binutils lintian debhelper dh-make devscripts
+   ```
+
+2. 生成`Debian/`目录
+
+   ```shell
+   dh_make --single --native -e your.email@example.com -p termsg_1.0.0 #纯原创
+   ```
+
+   
 
