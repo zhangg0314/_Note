@@ -44,6 +44,92 @@ Autotools 不是单个工具，而是由多个互补工具组成的生态，核�
 | make dist  | 基于 [Makefile.am](http://makefile.am/) 配置，自动打包源码（生成 .tar.gz 压缩包） |
 | make check | 执行 [Makefile.am](http://makefile.am/) 中定义的测试用例（需配置 TESTS 变量） |
 
+## 3.libtool
+
+`libtool` 是一款跨平台的库管理工具，主要用于简化**动态库（共享库）**和**静态库**的编译、链接、安装及版本管理过程。它封装了不同操作系统（如 Linux、macOS、Windows 等）对库文件处理的底层差异，让开发者能用统一的方式生成和管理库，无需关注各系统的具体实现细节。
+
+### 1.核心作用
+
+解决跨平台库开发的痛点。不同操作系统对库的命名规则、编译参数、链接方式、版本管理等存在显著差异：
+
+- **Linux**：动态库以 `.so` 为后缀（如 `libxxx.so.1.2.3`），静态库以 `.a` 为后缀；
+- **macOS**：动态库以 `.dylib` 为后缀（如 `libxxx.1.2.3.dylib`），静态库同样以 `.a` 为后缀；
+- **Windows**：动态库以 `.dll` 为后缀，静态库以 `.lib` 为后缀。
+
+`libtool` 的核心价值在于：**屏蔽这些平台差异**，提供一套统一的命令和规则，让开发者用相同的代码和流程，在不同系统上生成符合当地规范的库文件。
+
+### 2.主要功能
+
+1. **统一编译与链接**
+
+   无论是动态库还是静态库，`libtool` 都提供统一的命令（如 `libtool --mode=compile` 编译源码，`libtool --mode=link` 链接库），自动适配目标平台的编译器参数（如 `-fPIC`、`-shared` 等）。
+
+2. **版本管理**
+
+   支持库的版本号（主版本、次版本、修订号）管理，自动生成符合平台规范的版本化文件名和符号链接。例如在 Linux 上，指定版本 `1:0:0` 会生成：
+
+   - 实际库文件：`libxxx.so.1.0.0`
+   - 符号链接：`libxxx.so.1`（主版本链接）、`libxxx.so`（开发链接）
+
+3. **跨平台兼容**
+
+   自动识别目标操作系统，生成对应格式的库文件（如 Linux 的 `.so`、macOS 的 `.dylib`），无需开发者手动修改编译脚本。
+
+4. **静态库与动态库切换**
+
+   可通过参数（如 `--disable-static` 或 `--enable-shared`）快速切换生成静态库或动态库，无需修改源码。
+
+5. **安装与卸载**
+
+   提供 `libtool --mode=install` 和 `libtool --mode=uninstall` 命令，自动将库文件安装到系统标准路径（如 `/usr/lib`），并维护符号链接。
+
+### 3.典型使用流程
+
+在使用 Autotools（`autoconf` + `automake`）的项目中，`libtool` 通常按以下流程工作：
+
+1. **准备配置文件**
+
+   在 `configure.ac` 中添加 `AC_PROG_LIBTOOL` 启用 `libtool` 支持：
+
+   ```m4
+   AC_INIT([mylib], [1.0], [dev@example.com])
+   AC_PROG_CC          # 检测 C 编译器
+   AC_PROG_LIBTOOL     # 启用 libtool
+   AC_CONFIG_FILES([Makefile])
+   AC_OUTPUT
+   ```
+
+2. **定义库编译规则**
+
+   在 `Makefile.am` 中用 `libtool` 语法声明库的源码和版本：
+
+   ```makefile
+   # 声明要生成的 libtool 库（.la 为中间文件）
+   lib_LTLIBRARIES = libmylib.la
+   # 库的源码文件
+   libmylib_la_SOURCES = src/mylib.c src/helper.c
+   # 库版本号（遵循 libtool 规范：当前版本:修订号:接口年龄）
+   libmylib_la_LDFLAGS = -version-info 1:0:0
+   ```
+
+3. **生成工具文件**
+
+   执行 `autoreconf -i` 生成 `libtool` 所需的辅助脚本（如 `ltmain.sh`）：
+
+   ```bash
+   autoreconf -i
+   ```
+
+4. **编译与安装**
+
+   常规构建流程自动调用 `libtool` 生成库：
+
+   ```bash
+   ./configure  # 检测环境，生成含 libtool 规则的 Makefile
+   make         # 编译生成库（.so/.dylib 等）
+   sudo make install  # 安装库到系统目录
+   ```
+
 # 核心工具命令使用
 
 ## 1.autoscan
