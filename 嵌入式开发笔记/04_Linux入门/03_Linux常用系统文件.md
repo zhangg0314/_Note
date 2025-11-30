@@ -1,4 +1,6 @@
-# 硬件信息
+# ——proc目录——
+
+# CPU信息
 
 ## 1.查看CPU硬件信息
 
@@ -38,11 +40,64 @@ Machine model: Atmel AT91SAM9G25-EK
 
 
 
-## 4.常用配置目录/文件
 
-### 1./etc目录下的文件
 
-`/etc` 目录是 Linux 系统中用于存放系统配置文件的标准目录。许多重要的配置文件都存放在 `/etc` 目录下，这些文件在系统启动时会被不同的服务和程序读取，以完成系统的初始化和配置。
+# ——etc——
+
+# /etc目录
+
+`/etc` 是 Linux 系统中最核心的目录之一，名称源于 “Editable Text Configuration”（可编辑文本配置）的缩写，主要用于存放**系统和应用程序的配置文件**，是系统正常运行的 “配置中枢”。
+
+## 1.核心特点
+
+- **纯文本为主**
+  绝大多数文件是人类可读的文本文件，方便直接编辑（如用 `vi`、`nano` 等工具）。
+- **按功能分类**
+  目录结构按服务、应用或功能划分，便于管理和查找。
+- **系统级配置**
+  修改`/etc`下的文件通常需要 root 权限，且错误配置可能导致系统或程序异常。
+
+## 2.常用子目录与文件
+
+### 1.系统基础配置
+
+- `/etc/passwd`：用户账号信息（用户名、UID、家目录等）。
+- `/etc/group`：用户组信息（组名、GID、成员列表）。
+- `/etc/shadow`：用户密码哈希（加密存储，仅 root 可读写）。
+- `/etc/fstab`：开机自动挂载的文件系统配置（如硬盘、U 盘的挂载规则）。
+- `/etc/hostname`：系统主机名。
+- `/etc/hosts`：本地域名解析表（优先于 DNS 生效）。
+
+### 2.网络配置
+
+- `/etc/network/interfaces`（Debian/Ubuntu）或 `/etc/sysconfig/network-scripts/`（RedHat/CentOS）：网络接口（如 eth0、wlan0）的 IP、网关等配置。
+- `/etc/resolv.conf`：DNS 服务器地址配置。
+- `/etc/services`：系统服务与端口号的对应关系（如 SSH 对应 22 端口）。
+
+### 3.服务与进程管理
+
+- `/etc/systemd/`：systemd 服务的配置文件（`.service`），用于管理系统服务的启动 / 停止（如你之前提到的 `usb-mount@.service` 可能放在这里）。
+- `/etc/init.d/`：传统 SysV 风格的服务启动脚本（如 `ssh`、`nginx` 的启动脚本）。
+- `/etc/cron.d/`、`/etc/crontab`：定时任务（cron）的配置文件。
+
+### 4.应用程序配置
+
+- `/etc/ssh/`：SSH 服务的配置（如 `sshd_config` 控制 SSH 服务器行为）。
+- `/etc/nginx/`、`/etc/apache2/`：Web 服务器（Nginx/Apache）的配置目录。
+- `/etc/mysql/`、`/etc/postgresql/`：数据库服务的配置目录。
+- `/etc/sudoers`：`sudo` 命令的权限配置（控制哪些用户可执行 root 命令）。
+
+### 5.其他重要文件
+
+- `/etc/profile`、`/etc/bashrc`：系统级的 shell 环境变量配置（对所有用户生效）。
+- `/etc/issue`、`/etc/motd`：登录前显示的提示信息（如欢迎语）。
+- `/etc/udev/rules.d/`：udev 设备管理规则（如你之前的 USB 自动挂载规则放在这里）。
+
+### 6.总结
+
+`/etc` 目录是 Linux 系统的 “配置大脑”，包含了从用户管理、网络设置到服务运行的所有核心规则。理解其结构和文件用途，是管理 Linux 系统的基础 —— 无论是修改网络参数、配置服务，还是自定义设备行为，都离不开对 `/etc` 下文件的操作。
+
+如果需要查找某个具体配置，可通过 `grep` 或 `find` 命令搜索（如 `grep -r "关键词" /etc/`）。
 
 - **终端环境配置文件**
   当登录系统或新开启一个ssh连接启动bash进程时，一定会加载这4个配置文件：
@@ -84,11 +139,11 @@ Machine model: Atmel AT91SAM9G25-EK
 - **空设备文件**
   在Linux系统中，空设备文件`/dev/null`是一个特殊的文件，用于将数据彻底丢弃。它是一个特殊的文件设备，可以通过标准输入和标准输出访问。读取/dev/null将会立即返回EOF文件结束符，而向它写入任何数据将会直接被忽略掉，从而丢弃数据。Linux中，默认命令、脚本等的标准正常输出和标准错误输出默认是输出到标准终端上，即：屏幕。如果不想在标准终端上显示，可把结果输出到/dev/null中。
 
-# 服务自启动
+# 服务自启动（systemd）
 
-## 1.`systemd` 服务
+## 1.`systemd`服务
 
-`systemd`是 Linux 系统中广泛使用的系统和服务管理器，它取代了传统的`SysVinit`，负责系统启动、服务管理、进程监控等核心功能。其设计目标是提高系统启动速度、优化服务依赖管理，并提供更丰富的系统管理能力。适合长期稳定运行的命令，通过系统服务管理器 `systemd` 管理，支持开机自启、日志保存、状态监控等。
+`systemd`是 Linux 系统中广泛使用的系统和服务管理器，它取代了传统的`SysV`，负责系统启动、服务管理、进程监控等核心功能。其设计目标是提高系统启动速度、优化服务依赖管理，并提供更丰富的系统管理能力。适合长期稳定运行的命令，通过系统服务管理器 `systemd` 管理，支持开机自启、日志保存、状态监控等。
 
 ## 2.核心功能与特点
 
@@ -103,18 +158,18 @@ Machine model: Atmel AT91SAM9G25-EK
 5. **依赖管理**
    单元配置中可明确依赖关系（如 `After=network.target` 表示服务在网络启动后运行），<u>避免手动处理启动顺序</u>。
 
-## 3.常用 `systemctl` 命令
+## 3.常用`systemctl`命令
 
-| 命令                                       | 功能描述                                        |
-| ------------------------------------------ | ----------------------------------------------- |
-| `systemctl start <服务名>`                 | 启动指定服务                                    |
-| `systemctl stop <服务名>`                  | 停止指定服务                                    |
-| `systemctl restart <服务名>`               | 重启指定服务                                    |
-| `systemctl enable <服务名>`                | 设置服务开机自启动                              |
-| `systemctl disable <服务名>`               | 取消服务开机自启动                              |
-| `systemctl status <服务名>`                | 查看服务状态（运行 / 停止等）                   |
-| `systemctl list-unit-files --type=service` | 列出所有服务及自启动状态                        |
-| `systemctl daemon-reload`                  | 重新加载 `systemd` 配置（修改服务文件后需执行） |
+| 命令                                       | 功能描述                                            |
+| ------------------------------------------ | --------------------------------------------------- |
+| `systemctl start <服务名>`                 | 启动指定服务                                        |
+| `systemctl stop <服务名>`                  | 停止指定服务                                        |
+| `systemctl restart <服务名>`               | 重启指定服务                                        |
+| `systemctl enable <服务名>`                | **设置服务开机自启动**                              |
+| `systemctl disable <服务名>`               | 取消服务开机自启动                                  |
+| `systemctl status <服务名>`                | 查看服务状态（运行 / 停止等）                       |
+| `systemctl list-unit-files --type=service` | 列出所有服务及自启动状态                            |
+| `systemctl daemon-reload**`**              | **重新加载 `systemd` 配置（修改服务文件后需执行）** |
 
 ## 4.服务配置文件
 
@@ -162,7 +217,63 @@ WantedBy=multi-user.target          # 开机自启动时的目标级别
 journalctl -u xxx.service -f#动态打印日志
 ```
 
-## 6.开机监控网口抓包流程
+## 6.服务状态
+
+在 systemd 中，服务（`.service`）的 `STATE`（状态）反映了服务的启用状态、运行状态或配置属性，不同状态有明确的含义。以下是一些服务状态解析：
+
+### 1.`enabled`（已启用）
+
+- **含义**：服务被配置为 “开机自动启动”（随系统启动而启动），且当前可能处于运行中（`active`）或未运行（`inactive`）状态，仅表示 “自动启动开关已打开”。
+- **示例**：
+  - `app-start.service`：开机时会自动启动该应用服务。
+  - `console-setup.service`：系统启动时自动配置控制台（如字体、编码）。
+  - `cron.service`：定时任务服务，开机自启以保证定时任务生效。
+  - `autovt@.service`：自动启动虚拟终端（如 tty1），方便用户登录。
+
+### 2.`disabled`（已禁用）
+
+- **含义**：服务被配置为 “开机不自动启动”，但可以通过 `systemctl start` 手动启动。
+- **示例**：
+  - `console-getty.service`：默认不自动启动额外的控制台登录服务（仅保留必要的终端）。
+
+### 3.`static`（静态）
+
+- **含义**：服务本身没有 “自动启动” 配置（无 `[Install]` 段定义启动链接），无法通过 `systemctl enable` 启用自动启动，只能被其他服务 “按需触发”（**作为依赖被拉起**）。
+- **示例**：
+  - `apt-daily.service`/`apt-daily-upgrade.service`：APT 自动更新服务，由系统定时器（`timer`）触发，而非直接开机自启。
+  - `container-getty@.service`：容器的终端服务，仅当容器启动时被自动调用，无需独立开机自启。
+
+### 4.`generated`（生成的）
+
+- **含义**：服务文件不是手动编写的，而是由系统工具（如 `systemctl generate`）动态生成的临时配置，通常用于临时适配或自动兼容旧系统。
+- **示例**：
+  - `alsa-utils.service`：音频工具服务，可能由系统根据硬件自动生成配置。
+  - `config.service`：可能是某个程序运行时动态生成的配置服务。
+  - `cron_log.service`/`daydata2csv.service`：可能是日志或数据处理相关的动态生成服务。
+
+### 5.`masked`（已屏蔽）
+
+- **含义**：服务被 “彻底禁用”，不仅无法开机自启，甚至不能手动启动（`systemctl start` 会失败），相当于 “强制冻结”。通常用于禁用冗余或冲突的旧服务（如 SysV 时代的服务，在 systemd 系统中已被替代）。
+- **示例**：
+  - `bootlogd.service`/`bootlogs.service`：传统的启动日志服务，在 systemd 中已被 `journald` 替代，故屏蔽。
+  - `checkfs.service`/`checkroot.service`：传统的文件系统检查服务，systemd 已通过 `systemd-fsck` 实现，故屏蔽。
+  - `cryptdisks.service`：传统的加密磁盘服务，已被 `systemd-cryptsetup` 替代，故屏蔽。
+
+### 6.状态核心区别
+
+| 状态        | 自动启动 | 手动启动 | 典型用途                  |
+| ----------- | -------- | -------- | ------------------------- |
+| `enabled`   | 是       | 是       | 核心服务（如 cron、网络） |
+| `disabled`  | 否       | 是       | 偶尔手动运行的服务        |
+| `static`    | 否       | 间接触发 | 被其他服务依赖的辅助服务  |
+| `generated` | 按需     | 是       | 动态生成的临时 / 兼容服务 |
+| `masked`    | 否       | 否       | 已废弃、需彻底禁用的服务  |
+
+可以通过 `systemctl status 服务名` 查看服务的详细状态（如是否正在运行），例如：
+
+`systemctl status cron.service` 会显示 `active (running)` 或 `inactive (dead)` 等实时状态。
+
+## 7.开机监控网口抓包流程
 
 ### 1.创建服务文件
 

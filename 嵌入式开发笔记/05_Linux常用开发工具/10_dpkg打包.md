@@ -116,7 +116,270 @@ sudo apt install fakeroot
 
 # ——软件安装使用——
 
+# 包的类型
 
+## 1.二进制包
+
+`.deb`是**编译后的可安装包**，包含软件运行所需的所有文件（二进制程序、配置文件、资源文件等），以及安装 / 卸载时的脚本（如 `postinst`、`prerm`）。
+
+- **核心用途**：直接在 Debian/Ubuntu 系统上通过 `dpkg -i` 或 `apt` 安装，让软件在系统中运行。
+- **包含内容**：
+  - 预编译的二进制程序（如 `/usr/bin/xxx`）；
+  - 配置文件（如 `/etc/xxx.conf`）；
+  - 依赖声明（告诉系统需要哪些其他包才能运行）；
+  - 维护脚本（安装后执行的 `postinst`、卸载前执行的 `prerm` 等）。
+
+## 2.源代码包
+
+源代码包是 **“构建原材料” 的集合**，用于从原始代码重新生成二进制包，通常包含以下文件：
+
+- `.dsc`：描述文件（Debian Source Control），记录源代码包的元信息（版本、依赖、校验和等）。
+- `.tar.xz`（或 `.tar.gz`）：上游源代码压缩包（如 `xxx-1.0.orig.tar.xz`）。
+- `.debian.tar.xz`：Debian 打包规则压缩包，包含 `debian/` 目录（`control`、`rules`、`changelog` 等打包配置）。
+- **核心用途**：
+  1. **开源审计**：满足开源规范（如发布时必须提供源代码包），提供软件的原始代码和打包规则，确保没有恶意修改，符合开源协议。
+  2. **重现构建**：任何开发者都可通过 `dpkg-source -x xxx.dsc` 解压源代码包，再用 `dpkg-buildpackage` 重新编译出与官方一致的 `.deb` 包。
+  3. **跨平台编译**：源代码包可在不同架构（如 x86、ARM）上重新编译，生成对应平台的二进制包。
+
+# ——打包相关工具链——
+
+# `debhelper`
+
+## 1.工具介绍
+
+debhelper 是 Debian 打包工具链的核心组件，由一系列名为 `dh_*` 的脚本组成（如 `dh_install`、`dh_link` 等）。它的作用是**自动化 Debian 包构建过程中的重复工作**，替代手动编写复杂的 Makefile 或 shell 脚本，统一打包规范，减少错误。
+
+简单说：作为包维护者，只需在 `debian/` 目录下配置好相关文件（如 `*.links`、`*.install` 等），debhelper 就能通过这些 `dh_*` 命令自动完成文件安装、权限设置、符号链接创建、包压缩等一系列操作，最终生成符合标准的 `.deb` 包。
+
+## 2.常用命令介绍
+
+### 1. `dh_testdir`
+
+- **作用**：检查当前工作目录是否为源码包的根目录（即包含 `debian/` 目录的目录），确保构建在正确的环境中进行。
+- **意义**：避免在错误的目录下执行构建，导致文件路径混乱。如果目录不正确，会直接报错终止构建。
+
+### 2. `dh_testroot`
+
+- **作用**：检查当前构建是否以 root 权限执行（或通过 `fakeroot` 模拟 root 权限）。
+- **意义**：Debian 包构建过程中，部分操作（如设置文件权限、创建系统目录）需要 root 权限才能正确执行。如果权限不足，会报错并终止。
+
+### 3. `dh_install`
+
+- **作用**：根据 `debian/*.install` 配置文件，将源码中的文件安装到包的临时构建目录（如 `debian/termsg/`）。
+
+- 配置文件：需在`debian/`下创建`termsg.install`（假设包名为 `termsg`），格式为 “源码路径 目标路径”，例如：
+
+  ```bash
+  src/bin/* /usr/bin/
+  conf/* /etc/termsg/
+  ```
+
+  表示将`src/bin/`下的所有文件安装到包内的`/usr/bin/`，`conf/`下的文件安装到`/etc/termsg/`。
+
+- **注意**：这是文件安装的核心步骤，替代手动 `cp` 命令，确保文件路径正确。
+
+### 4. `dh_link`
+
+- **作用**：根据 `debian/*.links` 配置文件（即你之前提到的 `termsg.links`），在包的临时目录中创建符号链接。
+- **对应配置**：读取 `termsg.links` 中 “目标文件 链接文件” 的规则，自动创建软链接（如 `/home/app/checkmeter` 到 `/home/app/clearmeter` 的链接）。
+- **优势**：比手动 `ln -s` 更可靠，确保链接路径在包内的一致性。
+
+### 5. `dh_strip`
+
+- **作用**：剥离二进制文件中的调试符号（debug symbols），减小包的体积。
+- **细节**：默认会保留调试信息到单独的 `.ddeb` 包（调试包），主包仅包含精简后的二进制文件。如果需要保留调试符号，可通过参数 `--no-strip` 禁用。
+
+### 6. `dh_compress`
+
+- **作用**：压缩包中的文本文件（如手册、配置示例等），默认使用` gzip `压缩，减少包体积。
+- **例外**：二进制文件、已压缩文件（如 `.gz`、`.zip`）、目录等不会被压缩。可通过 `debian/*.compress` 配置文件指定不压缩的文件。
+
+### 7. `dh_fixperms`
+
+- **作用**：自动修复包中文件的权限，确保符合 Debian 规范（如可执行文件设为 `755`，普通文件设为 `644`，避免过松的权限导致安全问题）。
+- **细节**：会忽略 `debian/*` 配置文件中手动指定的权限，优先按 Debian 标准修复，确保一致性。
+
+### 8. `dh_installdeb`
+
+- **作用**：将包的控制文件（如 `control`、`postinst`、`prerm` 等）安装到临时构建目录的 `DEBIAN/` 子目录（`.deb` 包的核心元数据目录）。
+- **核心文件**：`DEBIAN/control`（包信息、依赖等）、`DEBIAN/postinst`（安装后脚本）、`DEBIAN/prerm`（卸载前脚本）等，这些文件会被 `dh_installdeb` 自动整理。
+
+### 9. `dh_gencontrol`
+
+- **作用**：生成或更新包的 `DEBIAN/control` 文件，自动填充动态信息（如包的架构、依赖关系的自动计算结果等）。
+- **依赖处理**：结合 `debian/control` 中的静态依赖描述，生成最终的依赖列表（如果启用了 `dh_shlibdeps`，会自动计算共享库依赖）。
+
+### 10. `dh_md5sums`
+
+- **作用**：为包中所有文件生成 MD5 校验和，写入 `DEBIAN/md5sums` 文件。
+- **作用**：安装时，系统会通过校验和验证文件是否被篡改，确保包的完整性。
+
+### 11. `dh_builddeb -- -Z gzip`
+
+- **作用**：将临时构建目录（如 `debian/termsg/`）打包为最终的 `.deb` 文件。
+- **参数说明**：`-- -Z gzip` 表示指定压缩算法为 gzip（`.deb` 包本质是 ar 归档，内部文件用 gzip 压缩）。可选的压缩算法还有 `xz`（更高压缩率，需较新系统支持）。
+- **输出**：生成的 `.deb` 包会放在源码根目录下，命名格式为 `{包名}_{版本}_{架构}.deb`。
+
+## 3.不常用命令介绍
+
+- `dh_installchangelogs ChangeLog`
+  安装更新日志（`ChangeLog`）到包的 `/usr/share/doc/包名/` 目录，方便用户查看版本变更。
+- `dh_installdocs`
+  安装文档文件（如 README、LICENSE）到 `/usr/share/doc/包名/`。
+- `dh_installexamples`
+  安装示例文件到 `/usr/share/doc/包名/examples/`。
+- `dh_installinit`
+  处理系统服务（`systemd` 或 `System V`）的启动脚本，替代手动创建 `rc*.d` 链接（比 `dh_link` 更规范）。
+- `dh_installcron`
+  安装` cron` 定时任务脚本到 `/etc/cron.*` 目录（比手动通过 `dh_link` 创建更规范，会自动处理权限和格式）。
+- `dh_shlibdeps`
+  自动计算二进制文件依赖的共享库，生成依赖列表并写入 `control` 文件（如果包包含编译的二进制，建议启用）。
+
+# `dpkg-deb`
+
+## 1.工具介绍
+
+`dpkg-deb` 是 Debian 系 Linux 系统中用于操作 `.deb` 包的底层工具，直接与 `.deb` 包的结构打交道，负责打包、解压、查询和修改 `.deb` 包等核心操作。它是 `dpkg` 工具集的一部分，比 `dpkg` 更偏向于对包文件本身的底层处理（`dpkg` 更侧重包的安装、卸载等系统级管理）。
+
+## 2.核心作用
+
+`.deb` 包本质是一种特殊的归档文件（基于 `ar` 格式），内部包含三部分核心内容：
+
+- 包元数据（如版本、依赖、架构等，存于 `DEBIAN/` 目录下的 `control`、`md5sums` 等文件）；
+- 实际安装的文件（如 `/usr/bin/`、`/etc/` 等路径下的程序、配置文件）。
+
+`dpkg-deb` 的作用就是直接操作这个归档文件，实现打包、解包、查看内容等功能，是构建 `.deb` 包的底层工具（`debhelper `等高级工具最终也会调用它完成打包）。
+
+## 3.常用命令与实例
+
+### 1. 打包`.deb` 包
+
+```bash
+dpkg-deb -b <源目录> <输出.deb包>
+```
+
+- **作用**：将一个符合 `.deb` 结构的目录（必须包含 `DEBIAN/` 子目录和元数据文件）打包成 `.deb` 文件。
+
+- 示例：若`myapp/`目录结构如下（模拟包的临时构建目录）：
+
+  ```plaintext
+  myapp/
+  ├── DEBIAN/
+  │   ├── control    # 包元数据（名称、版本、依赖等）
+  │   └── md5sums    # 文件校验和
+  └── usr/
+      └── bin/
+          └── myapp  # 实际可执行文件
+  ```
+
+  执行以下命令生成`myapp_1.0_amd64.deb`：
+
+  ```bash
+  dpkg-deb -b myapp myapp_1.0_amd64.deb
+  ```
+
+### 2. .解压`deb` 包
+
+```bash
+dpkg-deb -x <.deb包> <目标目录>
+```
+
+- **作用**：仅解压 `.deb` 包中的实际文件（不包含 `DEBIAN/` 元数据目录），用于查看或提取包内的程序 / 配置文件。
+
+- 示例：将`myapp.deb`中的文件解压到`extract/`目录：
+
+  ```bash
+  dpkg-deb -x myapp.deb extract/
+  # 解压后 extract/ 会出现 usr/bin/myapp 等文件（对应包内的安装路径）
+  ```
+
+### 3. 提取`DEBIAN/`目录
+
+```bash
+dpkg-deb -e <.deb包> <目标目录>
+```
+
+- **作用**：单独提取 `.deb` 包中的元数据（`DEBIAN/` 目录下的 `control`、`postinst` 等文件），用于查看或修改包的配置信息。
+
+- 示例：提取`myapp.deb`的元数据到`deb-meta/` 目录：
+
+  ```bash
+  dpkg-deb -e myapp.deb deb-meta/
+  # 解压后 deb-meta/ 会包含 control、md5sums 等文件
+  ```
+
+### 4. 查看包信息
+
+```bash
+dpkg-deb -I <.deb包> [文件名]
+```
+
+- **作用**：查看 `.deb` 包的元数据（如名称、版本、依赖、架构等），若指定 `文件名`（如 `control`），则仅显示该文件内容。
+
+- 示例：查看`myapp.deb`的完整元数据：
+
+  ```bash
+  dpkg-deb -I myapp.deb
+  ```
+
+  仅查看`control`文件内容：
+
+  ```bash
+  dpkg-deb -I myapp.deb control
+  ```
+
+### 5. 查看包内文件列表
+
+```bash
+dpkg-deb -c <.deb包>
+```
+
+- **作用**：显示 `.deb` 包中包含的所有实际文件（不含 `DEBIAN/` 元数据），类似 `ls` 命令的效果。
+
+- 示例：列出`myapp.deb`中的文件：
+
+  ```bash
+  dpkg-deb -c myapp.deb
+  # 输出类似：drwxr-xr-x root/root ... usr/bin/
+  #            -rwxr-xr-x root/root ... usr/bin/myapp
+  ```
+
+  
+
+### 6. 检查包的合法性
+
+```bash
+dpkg-deb -Check <.deb包>
+```
+
+- **作用**：检查 `.deb` 包的结构是否合法（如元数据是否完整、文件权限是否正确等），避免打包错误导致安装失败。
+
+- 示例：检查`myapp.deb`是否合规：
+
+  ```bash
+  dpkg-deb -Check myapp.deb
+  # 若合规无输出，否则会提示错误（如缺少 control 文件、权限错误等）
+  ```
+
+  
+
+## 4.与其他工具的关系
+
+1. 与 `debhelper` 的关系：
+
+   `debhelper`（`dh_*` 命令）是更高层的打包工具，它会自动处理文件安装、权限设置等流程，最终调用 `dpkg-deb -b` 完成 `.deb` 包的打包。
+
+2. 与 `dpkg` 的关系：
+
+   `dpkg` 是包管理工具（负责安装、卸载、查询已安装包等），而 `dpkg-deb` 是 `dpkg` 的 “辅助工具”，仅处理 `.deb` 包文件本身的结构（打包、解包等）。`dpkg` 安装 `.deb` 包时，底层也会调用 `dpkg-deb` 解析包内容。
+
+# `debuild`
+
+基于 `dpkg-buildpackage` 的更高级前端，提供额外功能（如 pbuilder 集成）。
+
+# `lintian`
+
+检查包是否符合 Debian 政策，发现潜在问题。
 
 # ——软件开发打包——
 
@@ -341,7 +604,7 @@ will gracefully handle almost any upstream tarball.
 
 ### 6. 生成特定文件
 
-1. **构建二进制包（不签名）**
+1. **仅构建二进制包（不签名）**
 
    ```bash
    dpkg-buildpackage -us -uc -b#这会在父目录生成 .deb文件。
@@ -353,7 +616,7 @@ will gracefully handle almost any upstream tarball.
    dpkg-buildpackage -us -uc -b -aarm64
    ```
 
-3. **生成源代码包**
+3. **仅生成源代码包**
 
    ```bash
    dpkg-buildpackage -S  #这会生成.dsc、.tar.gz 和 .diff.gz 文件。
@@ -502,8 +765,7 @@ dh_make -e 邮箱地址   -f  ../xxx.tar.gz
 
 #### 3.具体字段介绍
 
-[Ubuntu系统下deb包中control文件详解_deb control-CSDN博客](https://blog.csdn.net/Luckiers/article/details/118277548)
-	   [Debian Policy Manual, 5 "Control files and their fields"](http://www.debian.org/doc/debian-policy/ch-controlfields.html) 
+[Ubuntu系统下deb包中control文件详解_deb control-CSDN博客](https://blog.csdn.net/Luckiers/article/details/118277548)  [Debian Policy Manual, 5 "Control files and their fields"](http://www.debian.org/doc/debian-policy/ch-controlfields.html) 
 
 ```shell
 Source: termsg #源代码包的名称，如果软件包名称有两个词，用一个连字符（-）把它们连起来。软件包的名称只能有小写的英文字母，数字以及"+"和"-"
@@ -567,9 +829,9 @@ Description: package of terminal #二进制包的描述
 
 #### 1.特征介绍
 
-现在我们需要看看 dpkg-buildpackage(1) 用于实际创建软件包的 rules 文件。这个文件事实上是另一个 `Makefile`，但不同于上游源代码中的那个。和 `debian` 目录中的其他文件不同，这个文件被标记为可执行。强烈推荐参考链接：[系列二 详解 debian/rules | DeepinWiki](https://wiki.deepin.org/zh/待分类/02_按软件功能划分/02_开发人员常用软件介绍/01_编程开发/打包工具/相关内容/Debian发行版基础系列/详解debian_rules)
+这个文件事实上是另一个 `Makefile`，但不同于上游源代码中的那个。和 `debian` 目录中的其他文件不同，这个文件被标记为可执行。强烈推荐参考链接：[系列二 详解 debian/rules | DeepinWiki](https://wiki.deepin.org/zh/待分类/02_按软件功能划分/02_开发人员常用软件介绍/01_编程开发/打包工具/相关内容/Debian发行版基础系列/详解debian_rules)
 
-#### 2.`rules`文件中的 Target
+#### 2.文件中的 Target
 
 每一个 `rules` 文件， 就像其他的 `Makefile` 一样，包含着若干 rules，其中每一个都定义了一个 target 以及其具体 操作。一个新的 rule 以自己的 target 声明(置于第一列)来起头。 后续的行都以 TAB 字符 (ASCII 9) 来开头，以指示 target 的具体行为。 空行和以井号 `#` 开头的行会被当作注释而被忽略。当想要执行一个 rule 的时候，就将 target（目标）名称作为命令行参数来调用。比如说， `debian/rules build `以及 `fakeroot make -f debian/rules binary` 会分别执行 `build`和 `binary`两个 target。
 
@@ -587,7 +849,7 @@ Description: package of terminal #二进制包的描述
 |  `binary-indep`   | 在父目录中创建平台独立(`Architecture: all`)的二进制包。(必须) |
 | `get-orig-source` |           从上游站点获得最新的原始源代码包。(可选)           |
 
-#### 3.默认的 `rules` 文件
+#### 3.默认的文件
 
 新版本的 **dh_make** 会生成一个使用 **dh** 命令的非常简单但非常强大的默认的 `rules` 文件：
 
@@ -690,6 +952,15 @@ Description: package of terminal #二进制包的描述
 
 **dh_\*** 命令的功能依其名称不言而喻。 不过其中有一些值得在这里进行简要解释， 假定有一个基于 `Makefile` 的典型构建环境： 
 
+- **dh_builddeb**生成使用Debian 软件包
+
+  ```makefile
+  dh_builddeb -- -Z gzip
+  	--#是命令行参数分隔符，用于将 dh_builddeb 自身的选项与传递给其内部调用的 dpkg-deb 命令的选项区分开（即后面的参数会被传递给 dpkg-deb）。
+  	-Z gzip#这是传递给 dpkg-deb 的选项，指定 .deb 包内部文件的压缩算法为 gzip（dpkg-deb 是 Debian 系统中处理 .deb 包的底层工具）。
+  	#.deb 包本质是一个包含文件系统和元数据的归档，支持多种压缩算法（如 gzip、bzip2、xz 等），gzip 是较传统的选择，压缩速度快但压缩率略低于 xz。
+  ```
+
 - **dh_auto_clean** 通常在 `Makefile` 存在且有 `distclean` target 时执行以下命令:
 
   ```makefile
@@ -723,9 +994,19 @@ Description: package of terminal #二进制包的描述
 
 所有需要 **fakeroot** 命令的都包含了 **dh_testroot**。如果没有使用 fakeroot，那将会报错并退出。关于 **dh_make** 生成的 `rules` 文件，应该知道的最重要的事是，它仅仅是一个建议。它对多数简单的软件包有效，但对于更复杂的则要大胆对其进行定制以满足需要。
 
+#### 5.执行的目标顺序
+
+```shell
+debian/rules build
+	  👇
+debian/rules binary
+```
+
 ------
 
 ## 4.其他文件
+
+[第 5 章 debian 目录下的其他文件](https://www.debian.org/doc/manuals/maint-guide/dother.zh-cn.html)
 
 ### 1.`compat`文件
 
@@ -737,7 +1018,259 @@ $ echo 7 > debian/compat #Build-Depends: debhelper (>= 7), autotools-dev
 
 在特定场景下，可以在需要兼容旧版本系统时使用兼容等级9。然而，不建议使用任何低于 9 的兼容等级，在新建软件包时也应避免使用这些低的等级。
 
-## 3.修改配置
+### 2.`install`文件
+
+`install` 是 Debian 打包中 `dh_install` 工具的配置文件，核心作用是**补充定义文件的安装规则**，解决 `make install` 未覆盖的文件部署需求，核心要点如下：
+
+1. **核心功能**
+   - 指定非标准安装文件的路径（如未被 `make install` 处理的脚本、资源文件）。
+   - 安装时对文件重命名（通过 “源路径 + 目标路径 + 新文件名” 实现）。
+   - 批量定义多个文件的安装规则，每行对应一条配置。
+2. **基础格式**
+   - 完整格式（指定路径 + 可选重命名）：`源文件相对路径 目标目录/[新文件名]`（目标目录省略 `/`，如 `src/bar usr/bin` 或 `src/old usr/bin/new`）。
+   - 简化格式（路径一致时）：仅写源文件相对路径（如 `share/icon.png`，自动安装到 `/usr/share/icon.png`）。
+3. **使用限制**
+   - 优先用专用工具处理特定文件（文档用 `docs` 文件、手册页用 `manpages` 文件），避免功能冲突。
+   - 源文件不存在时，`dh_install` 会自动到 `debian/tmp` 目录查找。
+
+### 3.`package.install` 文件
+
+`package.install` 是 `install` 文件的**标准命名规范**，仅用于 “单源码包生成单个二进制包” 的场景，核心说明如下：
+
+1. **命名逻辑**
+   - `package` 必须与 `debian/control` 中 `Package:` 字段的二进制包名完全一致（如你的包名是 `termsg`，则文件名为 `termsg.install`）。
+   - 打包工具（如 `dpkg-buildpackage`）会自动识别该文件，无需额外配置，直接关联到对应的二进制包。
+2. **与多包场景的区别**
+   - 若一个源码包生成多个二进制包（如 `termsg-core` 和 `termsg-tools`），则需分别创建 `termsg-core.install` 和 `termsg-tools.install`，各自定义对应子包的文件安装规则。
+   - 单包场景下无需拆分，统一用 `package.install` 管理所有文件的安装配置，简洁且符合 Debian 打包规范。
+3. **核心作用**
+   - 明确绑定 “配置文件 - 二进制包” 的对应关系，让打包工具快速识别该文件属于哪个包，避免多包混淆。
+   - 保持打包目录结构清晰，方便维护（一眼可识别每个包的文件安装规则）。
+
+### 4.`package.links`文件
+
+包维护者需创建附加符号链接时，**必须用 dh_link 工具**，且链接对应的完整文件路径要记录在`package.links `文件中。
+
+#### 1.核心规则说明
+
+- dh_link 是 Debian 打包工具链（`debhelper`）的一部分，专门用于在包构建过程中创建符号链接，避免手动创建导致的路径错误、权限问题或兼容性问题。
+- `package.links` 文件需放在 `debian`/ 目录下，格式要求简洁明确：每行包含两个路径，分别是 “目标文件（已存在的文件 / 目录）” 和 “链接文件（要创建的符号链接路径）”。
+
+#### 2.具体使用步骤
+
+1. 编写 `package.links `文件：按 “目标路径 链接路径” 的格式，逐行列出所有需要创建的符号链接。
+
+   示例：
+
+   ```shell
+   /usr/bin/myapp /usr/local/bin/myapp
+   ```
+
+   （给 /usr/bin 下的 myapp 再创建一个 /usr/local/bin 下的软链接）。
+
+2. 在 `debian/rules` 文件中启用 dh_link：确保 rules 文件中包含 `dh_link` 指令（默认 `debhelper `配置已包含，无需额外修改，除非自定义了构建流程）。
+
+3. 构建包时自动执行：运行 `dpkg-buildpackage` 构建 .deb 包时，dh_link 会读取 `package.links` 的配置，自动**在包内创建对应的符号链接**，安装后链接会生效。
+
+#### 3.关键注意事项
+
+- 路径必须写完整绝对路径，不能用相对路径，避免安装后链接失效。
+- 目标文件需是包内已安装的文件（或系统默认存在的文件），否则安装后会出现 “broken link”（无效链接）。
+- 不要手动在包内创建符号链接后打包，dh_link 会统一管理链接，确保兼容性和可维护性。
+
+你提到的是 Debian 打包中 `debian/package.dirs` 文件的作用和规范，核心是用于定义那些在 `dh_auto_install` 阶段（即 `make install DESTDIR=...`）未被自动创建的目录。结合你的描述，整理关键要点如下：
+
+### 5.`package.dirs`文件
+
+####  1.核心用途
+
+当 `make install` 过程中，目标文件 / 目录因 `Makefile` 缺陷（如未声明创建逻辑）而未被自动生成时，`package.dirs` 用于**强制声明需要创建的目录**，确保包安装后这些目录存在。
+
+例如：若应用需要 `/var/log/myapp` 目录，但 `Makefile` 没写 `mkdir -p $(DESTDIR)/var/log/myapp`，则 `dh_auto_install` 会漏掉这个目录，此时需在 `package.dirs` 中声明，避免安装后因目录缺失导致程序报错。
+
+#### 2. 关键规范
+
+- **无前置斜杠**
+  目录名必须省略前导 `/`，例如写 `var/log/myapp` 而非 `/var/log/myapp`（工具会自动拼接 `DESTDIR` 生成完整路径）。
+- **无需提前创建**
+  `dh_install` 等工具会自动根据 `package.dirs` 内容，在包构建时创建这些目录（包括父目录），无需手动处理。
+- **优先尝试自然安装**
+  只有当 `dh_auto_install` 确实漏掉目录时才用它，不要预先生成冗余目录（遵循 “最小必要” 原则，避免污染系统目录结构）。
+
+#### 3. 示例用法
+
+假设包需要以下目录，但 `make install` 未创建：
+
+```bash
+# debian/termsg.dirs
+home/app/conf        # 对应 /home/app/conf（安装时自动创建）
+etc/cron.hourly      # 系统目录通常已存在，但若需确保，可声明
+mtdpart1/syslog.d    # 自定义目录，确保安装后存在
+```
+
+构建时，`debhelper` 会自动在包内创建这些目录，权限默认为 `0755`（可通过 `debian/rules` 或 `dh_fixperms` 调整）。
+
+### 6.`package.substvars`文件
+
+`termsg.substvars` 是 Debian 打包中的**变量替换文件**，核心作用是定义或者强制覆盖修改可在其他打包文件（如 `control`、`postinst` 脚本）中复用的变量（包括系统生成的变量），避免硬编码，提升打包灵活性和可维护性。
+
+#### 1.核心用途
+
+- 存储动态或重复使用的信息，比如版本号、依赖包版本、安装路径、自定义配置值等。
+- 打包时，debhelper 工具会自动读取这些变量，替换到其他文件的 `@变量名@` 占位符中。
+
+#### 2.常见变量与格式
+
+文件格式为「`变量名=值`」，每行一个变量，无空格分隔，示例如下：
+
+```bash
+# 应用版本号（可同步 Makefile 版本，避免多处修改）
+version=1.2.3
+# 依赖的核心包最低版本
+depends.python=python3 >= 3.8
+# 自定义安装路径（与 dirs/links 中的路径呼应）
+app.libdir=/home/app/lib
+# 配置文件路径
+app.conf=/home/app/conf/proparse.conf
+```
+
+#### 3.实际使用场景
+
+假设在 `termsg.control` 中需要声明依赖，或在 `postinst` 脚本中用到安装路径，可这样用：
+
+1. 在`termsg.substvars`中定义变量：
+
+   ```bash
+   app.depends=dpkg >= 1.17.27, cron >= 3.0pl1-128
+   app.libdir=/home/app/lib
+   ```
+
+2. 在`termsg.control`中引用：
+
+   ```bash
+   Depends: @app.depends@, ${shlibs:Depends}
+   Description: 自定义应用，库文件存放于 @app.libdir@
+   ```
+
+3. 打包时，工具会自动替换为实际值，最终生成的`control`文件会变成：
+
+   ```bash
+   Depends: dpkg >= 1.17.27, cron >= 3.0pl1-128, ${shlibs:Depends}
+   Description: 自定义应用，库文件存放于 /home/app/lib
+   ```
+
+#### 4.关键注意事项
+
+- 变量名可自定义（建议带前缀，如 `app_`），避免与系统默认变量（如 `shlibs:Depends`、`misc:Depends`）冲突。
+- 无需手动替换变量，debhelper 会在 `dpkg-buildpackage` 过程中自动完成替换。
+- 若变量值涉及路径，需与 `termsg.dirs`、`termsg.links` 中的路径保持一致，避免冲突。
+- 若为系统默认变量，则系统的变量会被强制覆盖。
+
+### 7.`{pre,post}{inst,rm}`文件
+
+`preinst`、`postinst`、`prerm`、`postrm`的执行时机严格绑定 dpkg 的包操作流程（安装、升级、卸载、彻底清除），每个脚本对应固定阶段，核心执行时机如下：
+
+#### 1. 安装包
+
+```shell
+dpkg -i package.deb
+```
+
+- `preinst`：安装包文件到系统之前执行（仅在首次安装时运行）。
+
+  **用途**：检查系统环境（如依赖是否满足、版本是否兼容）、停止冲突服务、备份旧文件等。
+
+- `postinst`：安装包文件到系统之后执行（首次安装完成后运行）。
+
+  **用途**：启动 / 重启服务、创建符号链接、更新系统缓存、配置数据库等。
+
+#### 2. 升级包
+
+```shell
+dpkg -i new-package.deb #替换旧版本
+```
+
+- 旧版本 `preinst`：先执行旧包的 `preinst` 脚本。
+
+  **用途**：停止旧版本服务、准备升级环境（如备份旧配置）。
+
+- 新版本`preinst`：再执行新版本的 `preinst`脚本。
+
+  **用途**：同安装时，检查新版本所需环境。
+
+- 新版本 `postinst`：最后执行新版本的 `postinst` 脚本。
+
+  **用途**：启动新版本服务、迁移配置文件、清理旧版本残留等。
+
+#### 3. 卸载包
+
+```shell
+dpkg -r package#保留配置文件
+```
+
+- `prerm`：卸载包文件之前执行。
+
+  **用途**：停止包对应的服务、解除相关依赖（如移除符号链接）。
+
+- `postrm`：卸载包文件之后执行。
+
+  用途：清理临时文件、删除空目录、通知系统配置变更等。
+
+#### 4. 彻底清除包
+
+```shell
+dpkg -P package#删除所有文件和配置
+```
+
+- 执行流程与 “卸载” 完全一致（先 `prerm` 再` postrm`）。
+- **区别**：`postrm` 脚本中可通过判断操作类型（`$1` 参数为 `purge`），额外执行删除配置文件、数据库等彻底清理操作。
+
+#### 5.脚本参数
+
+每个脚本会接收 `dpkg `传递的参数（`$1`），可通过参数判断当前执行场景，示例：
+
+- `$1 = install`：首次安装时（preinst/postinst）。
+- `$1 = upgrade`：升级时（preinst/postinst）。
+- `$1 = remove`：卸载时（prerm/postrm）。
+- `$1 = purge`：彻底清除时（postrm）。
+
+比如 `postrm`中可写：`if [ "$1" = purge ]; then rm -rf /etc/app/config; fi`，仅在彻底清除时删除配置文件。
+
+### 8.`files`文件
+
+Debian 打包目录下的 `files` 文件（路径：`debian/files`）是 **打包过程自动生成的清单文件**，核心作用是记录当前构建的 `.deb` 包及相关辅助文件的信息，供 `dpkg-gencontrol`、`dpkg-buildpackage` 等工具读取使用，无需手动编辑。
+
+#### 1.核心作用
+
+- 作为包构建的 “产物清单”，告诉打包工具：本次构建生成了哪些包文件、对应的大小和校验信息。
+- 后续执行 `dpkg-source`（生成源码包）、`dpkg-upload`（上传包到仓库）等操作时，工具会依赖该文件识别包产物，避免遗漏或错误。
+
+#### 2.自动生成时机
+
+当运行 `dpkg-buildpackage` 或 `dh_builddeb` 构建 `.deb` 包时，工具会自动创建 / 更新 `debian/files`，无需手动创建。构建完成后，该文件会被保留在 `debian/` 目录下，删除后重新构建会再次自动生成。
+
+#### 3.文件内容格式
+
+每行对应一个构建产物，格式为：`包文件名 组件 大小 校验和`（字段用空格分隔），示例：
+
+```plaintext
+termsg_1.0.0_amd64.deb main debian-installer 12345 sha256:abcdef1234567890...
+termsg-dbg_1.0.0_amd64.deb main debug 67890 sha256:fedcba0987654321...
+```
+
+- 第 1 列：包文件名（如 `termsg_1.0.0_amd64.deb`，包含包名、版本、架构）；
+- 第 2 列：组件（通常为 `main`/`contrib`/`non-free`，对应 Debian 软件仓库分类）；
+- 第 3 列：优先级 / 用途（如 `debian-installer` 表示安装包，`debug` 表示调试包）；
+- 第 4 列：包文件大小（单位：字节）；
+- 第 5 列：校验和（如 `sha256:...`，用于验证包文件完整性）。
+
+#### s
+
+1. **禁止手动编辑**：手动修改可能导致打包工具识别失败（如校验和不匹配、文件路径错误），引发构建中断。
+2. **构建失败时的处理**：若构建失败后 `debian/files` 残留错误内容，重新构建前可删除该文件，工具会重新生成正确版本。
+3. **多包构建场景**：如果你的项目同时生成多个 `.deb` 包（如主包、调试包、文档包），所有产物都会被列在该文件中，工具会批量处理。
+
+# 修改`debian`目录
 
 1. **删除 `.ex` 或 `.EX` 后缀**：
    对需要使用的文件，移除扩展名（如 `init.d.ex` → `init.d`）。
@@ -748,7 +1281,7 @@ $ echo 7 > debian/compat #Build-Depends: debhelper (>= 7), autotools-dev
 3. **忽略不需要的文件**：
    不需要的文件（如 `menu.ex`）可以直接删除。
 
-# 6.高级功能
+# 高级功能
 
 1. **并行构建**
    使用 `-j` 选项指定并行编译的线程数：
@@ -771,16 +1304,7 @@ $ echo 7 > debian/compat #Build-Depends: debhelper (>= 7), autotools-dev
    pbuilder build ../myproject_1.0.dsc
    ```
 
-# 7.相关工具链
 
-1. **`debhelper`**
-   提供 `dh_*` 系列命令（如`dh_make` `dh_auto_configure`、`dh_install`），简化 `rules` 文件编写。
-2. **`dpkg-deb`**
-   直接操作 `.deb` 包的工具（创建、提取、查看）。
-3. **`debuild`**
-   基于 `dpkg-buildpackage` 的更高级前端，提供额外功能（如 pbuilder 集成）。
-4. **`lintian`**
-   检查包是否符合 Debian 政策，发现潜在问题。
 
 # 8.原生包和非原生包
 
