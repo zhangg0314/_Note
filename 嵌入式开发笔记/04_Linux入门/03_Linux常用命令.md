@@ -901,6 +901,18 @@ sudo vi ~/.gitconfig
    git commit -m "Add .gitignore file"
    ```
 
+### 2.官方配置
+
+[gitignore/VisualStudio.gitignore at main · github/gitignore · GitHub](https://github.com/github/gitignore/blob/main/VisualStudio.gitignore)
+
+## 11.添加 git 子模块
+
+[Git 自动添加 git 子模块(.gitmodules)|极客教程](https://geek-docs.com/git/git-questions/74_git_adding_git_submodules_automatically_gitmodules.html)
+
+## 12.设置文件属性
+
+[git配置文件—— .gitattributes - qiqi715 - 博客园](https://www.cnblogs.com/qiqi715/p/9286468.html)
+
 # Shell
 
 ## 1.shell脚本概述

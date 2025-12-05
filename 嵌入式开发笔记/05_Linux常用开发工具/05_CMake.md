@@ -1,49 +1,49 @@
-# CMake概述
-本章主要是个人对https://www.bookstack.cn/read/CMake-Cookbook/README.md一些知识的总结，以及难以理解的地方进行一个通俗易懂的个人讲解，其中会剔除一些本人项目当中未使用的内容，而主要是注重遇到过的和比较重要的部分。此章节的目录将会参考该网址目录进行排列。
-		`CMakeLists.txt`文件类似于`Shell`脚本，里面写的都是我们想要执行的`CMake`命令。`CMake `主要是一个配置系统(构建系统生成器), 而不是一个构建系统。
-		CMake 的主要工作是生成各种构建系统可以使用的配置文件，例如生成 Makefile (Unix)、Visual Studio 项目文件 (.sln) 等，处理依赖关系、编译选项、链接选项等配置。真正的构建系统是:`Make`、`Ninja`、`Visual Studio` `MSBuild`、`Xcode`等。CMake 会自动将这些高层次的配置文件转换为具体平台上的构建系统配置文件，如在Unix上转为Makefile。
+# 前言概述
+​	本笔记主要是个人对https://www.bookstack.cn/read/CMake-Cookbook/README.md一些知识的总结，以及难以理解的地方进行一个通俗易懂的个人讲解，其中会剔除一些本人项目当中未使用的内容，而注重遇到过的和比较重要的部分。此章节的目录将会参考该网址目录进行排列。
+​	`CMakeLists.txt`文件类似于`Shell`脚本，里面写的都是我们想要执行的`CMake`命令。`CMake `主要是一个配置系统(构建系统生成器), 而不是一个构建系统。
+​	`CMake`的主要工作是生成各种构建系统可以使用的配置文件，例如生成 `Makefile (Unix)`、`Visual Studio` 项目文件 (`.sln`) 等，处理依赖关系、编译选项、链接选项等配置。真正的构建系统是:`Make`、`Ninja`、`Visual Studio` `MSBuild`、`Xcode`等。`CMake`会自动将这些高层次的配置文件转换为具体平台上的构建系统配置文件，如在`Unix`上转为`Makefile`。
 
 ------
 
-# CMake运行的三个步骤
+# 运行步骤
 
-## 1.配置（CMake配置阶段）
+## 1.`CMake`配置阶段
 
 就像查看食谱和准备食材：
 
-- 食谱：`CMakeLists.txt`文件就像食谱，它详细说明了如何构建你的项目。它包含了所有必要的指令，比如需要哪些库（食材）、如何编译源代码（烹饪步骤）等。
-- 食材清单：`find_package`和`find_library`等命令就像查找食材清单，它们帮助你找到项目需要的外部库和依赖。
+- 食谱：`CMakeLists.txt`文件就像食谱，它详细说明了如何构建项目。它包含了所有必要的指令，比如需要哪些库（食材）、如何编译源代码（烹饪步骤）等。
+- 食材清单：`find_package`和`find_library`等命令就像查找食材清单，它们帮助找到项目需要的外部库和依赖。
 
 - 准备食材：`add_definitions`、`add_compile_options`等命令用来设置编译器的标志和定义，就像根据食谱调整食材的处理方式（比如切丁、切片）。
 
 
-通俗来说：配置阶段就是告诉 CMake 你的项目需要什么，以及如何构建它。CMake 会根据`CMakeLists.txt`文件中的指令，生成一个适合你操作系统和编译器的构建系统（比如 Makefile 或 Visual Studio 项目文件）。
+通俗来说：配置阶段就是告诉`CMake`项目需要什么，以及如何构建它。`CMake`会根据`CMakeLists.txt`文件中的指令，生成一个适合操作系统和编译器的构建系统（比如`Makefile`或 `Visual Studio`项目文件）。
 
-## 2.构建（CMake构建阶段）
+## 2.`CMake`构建阶段
 
 就像按照食谱烹饪：
 
-- 烹饪：一旦食谱（`CMakeLists.txt`）和所有食材（依赖库）都准备好了，你就可以开始烹饪（构建）了。这就是`cmake --build`命令做的事情，它会调用生成的构建系统（比如 make 或 ninja）来编译源代码，链接库，生成可执行文件或库文件。
+- 烹饪：一旦食谱（`CMakeLists.txt`）和所有食材（依赖库）都准备好了，就可以开始烹饪（构建）了。这就是`cmake --build`命令做的事情，它会调用生成的构建系统（比如 make 或 ninja）来编译源代码，链接库，生成可执行文件或库文件。
 
-- 调整火候：在构建过程中，你可以设置不同的构建类型（比如 Debug 或 Release），这就像调整烹饪的火候，以适应不同的需求（比如开发时需要更多的调试信息，而发布时需要优化性能）。
+- 调整火候：在构建过程中，可以设置不同的构建类型（比如 Debug 或 Release），这就像调整烹饪的火候，以适应不同的需求（比如开发时需要更多的调试信息，而发布时需要优化性能）。
 
 
-通俗来说：构建阶段就是实际编译和链接你的代码的过程。CMake 在这个阶段不会做任何决定，它只是调用配置阶段生成的构建系统来完成实际的构建工作。
+通俗来说：构建阶段就是实际编译和链接代码的过程。`CMake`在这个阶段不会做任何决定，它只是调用配置阶段生成的构建系统来完成实际的构建工作。
 
-## 3.安装（CMake安装阶段）
+## 3.`CMake`安装阶段
 
 就像装盘上桌：
 
-- 装盘：构建完成后，你的项目可能需要安装到系统中，这样其他程序就可以使用它了。`cmake --install`命令就像装盘上桌的过程，它会将可执行文件、库文件、头文件等安装到指定的位置。
+- 装盘：构建完成后，项目可能需要安装到系统中，这样其他程序就可以使用它了。`cmake --install`命令就像装盘上桌的过程，它会将可执行文件、库文件、头文件等安装到指定的位置。
 
-- 调料：在安装过程中，你可能还需要设置环境变量（比如`PATH`）或者配置文件，这就像在装盘时添加一些调料，确保用户可以轻松地使用你的程序。
+- 调料：在安装过程中，可能还需要设置环境变量（比如`PATH`）或者配置文件，这就像在装盘时添加一些调料，确保用户可以轻松地使用程序。
 
 
 通俗来说：安装阶段是将构建好的项目部署到系统中的过程。这通常涉及到复制文件到正确的位置，并确保用户可以轻松地访问和使用它们。
 
-## 4.总结
+## 4.`CMake`运行总结
 
-- 配置阶段：告诉 CMake 你的项目需要什么，以及如何构建它。
+- 配置阶段：告诉`CMake`项目需要什么，以及如何构建它。
 
 - 构建阶段：实际编译和链接代码，生成可执行文件或库文件。
 
@@ -51,26 +51,11 @@
 
 ------
 
-# CMake生成的文件介绍
+# 命令行命令
 
-## 1.CMakeCache.txt 
+要配置项目并生成构建器，必须通过命令行界面(CLI)运行`cmake`命令。
 
-`CMakeCache.txt`是 执行`cmake`生成的一个缓存文件，存储了` CMake `构建过程中的各种变量和设置，存储` CMake` 运行时的配置选项缓存变量值以加速后续构建、记录项目的基本设置。
-
-## 2.cmake_install.cmake
-
-`cmake_install.cmake` 是执行`cmake`生成的一个安装脚本文件。主要用于处理项目的安装规则。定义如何安装项目的文件（可执行文件、库文件、头文件等）、指定安装位置、设置安装权限、处理运行时依赖。
-
-- 当运行 `cmake `命令时自动生成。
-- 当执行 make install 或 `cmake --install .` 时被调用。
-
-------
-
-# CLI（命令行界面）
-
-要配置项目并生成构建器，我们必须通过命令行界面(CLI)运行`cmake`命令。
-
-## 1.命令语法格式
+## 1.语法格式
 
 ```shell
 cmake [选项] <源码目录> -B <构建目录>
@@ -87,9 +72,9 @@ cmake [options] -S <path-to-source> -B <path-to-build>
     	--build .		#构建示例项目
 ```
 
-## 2.常用选项说明
+## 2.常用选项
 
-### 设置`CMake`变量
+### 1.设置变量
 
 ```shell
 -D<变量>=<值>
@@ -98,9 +83,8 @@ cmake [options] -S <path-to-source> -B <path-to-build>
 cmake . -DCMAKE_CXX_STANDARD=11
 #指定交叉编译工具链文件,用于ARM平台编译
 -DCMAKE_TOOLCHAIN_FILE=./CMake/arm-linux-gnueabihf.cmake    
-
-
 #交叉编译: 使用CMAKE_TOOLCHAIN_FILE指定工具链进行跨平台编译
+
 
 #构建类型: 通过CMAKE_BUILD_TYPE设置,常见值有:
 					Debug: 调试版本
@@ -109,22 +93,22 @@ cmake . -DCMAKE_CXX_STANDARD=11
 					MinSizeRel: 最小体积的发布版本
 ```
 
-### 指定生成器类型
+### 2.指定生成器类型
 
 ```shell
 -G Ninja        #指定生成器为Ninja构建系统,比make更快
 ```
 
-### 指定源码目录
+### 3.指定源码目录
 
 ```shell
 -S .           # 指定源码目录为当前目录
 ```
 
-###  指定构建目录
+###  4.指定构建目录
 
 ```shell
--B ./build/$ildType    # 指定构建目录CMakeCache.txt 文件
+-B ./build/$BuildType    # 指定构建目录CMakeCache.txt 文件
 ```
 
 ## 3.完整示例
@@ -152,32 +136,25 @@ cmake . -DCMAKE_CXX_STANDARD=11
 -B ./build/$buildType    # 指定构建目录即存放CMakeCache.txt等生成的文件的目录
 ```
 
-1. 构建系统生成路径
-   当执行完CMake命令后，会在CMake命令执行的目录【不是CMakeLists.txt所在目录】生成一些中间文件比如`CMakeCache.txt`，`Makefile`,`cmake_install.cmake`等文件。
-
-   ```bash
-   cmake -Bbuild
-   ```
-
 ------
 
-# CMake基础命令（CMakeLists.txt）
+# 构建配置命令
 
-## 注释
+## 1.注释
 
-### 行注释
+### 1.行注释
 
 ```cmake
 #这是一个行注释
 ```
 
-### 多行（块）注释
+### 2.多行注释
 
 ```cmake
 #[[多行注释，....，.....]]
 ```
 
-## 指定最低版本
+## 2.指定最低版本
 
 ```cmake
 cmake_minimum_required(VERSION 3.0)
@@ -185,7 +162,7 @@ cmake_minimum_required(VERSION 3.0)
 #最好还是写上，避免因主机上安装的cmake版本过低而导致的错误
 ```
 
-## 指定工程名
+## 3.指定工程名
 
 定义工程名称，并可指定工程的版本、工程描述、web主页地址、所支持的语言（即用哪种语言去构建，默认是所有语言），如果不需要这些可以省略，只需要指出工程名即可。
 
@@ -198,7 +175,7 @@ project(<project name>
 		)
 ```
 
-## 生成可执行程序
+## 4.生成可执行程序
 
 ```cmake
 add_executable(app main.c add.c sub.c)
@@ -206,9 +183,9 @@ add_executable(app main.c add.c sub.c)
 add_executable(app main.c;add.c;sub.c)
 ```
 
-## 定义系统/自定义变量
+## 5.定义变量
 
-### 为自定义变量赋值
+### 1.自定义变量赋值
 
 ```cmake
 #语法：
@@ -220,7 +197,7 @@ add_executable(app ${MyVar})
 #利用set赋值的变量值一切皆为字符串类型。
 ```
 
-### 指定C++标准
+### 2.指定C++标准
 
 ```cmake
 #指定C++的标准。如设置为C++11，C++12
@@ -231,16 +208,17 @@ set(CMAKE_CXX_STANDARD 12)
 cmake ./ -DCMAKE_CXX_STANDARD=11
 ```
 
-### 指定可执行文件的输出路径
+### 3.可执行文件的输出路径
 
 ```cmake
 set(home /home/linux/demo)
 set(EXECUTABLE_OUTPUT_PATH ${home}/dir )
+#当然一般在配置构建是通过-B选项就指定了构建目录。无需再指定了
 ```
 
-## 搜索文件
+## 6.搜索文件
 
-### aux_source_directory
+### 1.aux_source_directory
 
 ```cmake
 #查找某个目录下的所有源文件
@@ -249,7 +227,7 @@ aux_source_directory(<dir> <var>)
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/src SRC_LIST)
 ```
 
-### file
+### 2.file
 
 ```cmake
 file(GLOB/GLOB_RECURSE 变量名 要搜索的文件路径和文件类型)
@@ -260,7 +238,7 @@ file(GLOB/GLOB_RECURSE 变量名 要搜索的文件路径和文件类型)
 file(GLOB MAIN_SRC ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
 ```
 
-## 指定头文件目录
+## 7.指定头文件目录
 
 ```cmake
 include_directories(<dir>)
@@ -268,9 +246,9 @@ include_directories(<dir>)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 ```
 
-## 库生成
+## 8.库生成
 
-### 静态库
+### 1.静态库
 
 ```cmake
 add_library(库名称 STATIC 源文件1 [源文件2] ...)
@@ -551,3 +529,16 @@ add_definition(-DDEBUG)
 # 参考链接
 
 https://www.bookstack.cn/read/CMake-Cookbook/README.md
+
+# 中间生成文件
+
+## 1.CMakeCache.txt 
+
+`CMakeCache.txt`是 执行`cmake`生成的一个缓存文件，存储了` CMake `构建过程中的各种变量和设置，存储` CMake` 运行时的配置选项缓存变量值以加速后续构建、记录项目的基本设置。
+
+## 2.cmake_install.cmake
+
+`cmake_install.cmake` 是执行`cmake`生成的一个安装脚本文件。主要用于处理项目的安装规则。定义如何安装项目的文件（可执行文件、库文件、头文件等）、指定安装位置、设置安装权限、处理运行时依赖。
+
+- 当运行 `cmake `命令时自动生成。
+- 当执行 make install 或 `cmake --install .` 时被调用。
