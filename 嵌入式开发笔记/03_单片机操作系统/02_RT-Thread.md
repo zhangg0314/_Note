@@ -236,4 +236,82 @@ make: *** Waiting for unfinished jobs....
 
 ![FE31D9D3-4D8B-43ea-BB3D-E1EF1D022687](.\figure\FE31D9D3-4D8B-43ea-BB3D-E1EF1D022687.png)
 
+## 2.SCONS配置同步
+
+**错误：**
+
+每次同步SCONS配置时，总会出现几个文件夹被排除构建，如下：![image-20251208160257042](.\figure\image-20251208160257042.png)
+
+**原因：**`common`总目录下存在scons脚本，因此会对改目录下的所以文件进行精细化控制而非使用默认控制，而经过检查发现只有DLT698目录下存在scons脚本，其他目录均没有，因此同步`commom`目录的脚本配置时，执行的脚本结果就是只对DLT698添加了构建。
+
+**解决：**其余目录下的均加上scons脚本。再同步scons配置到项目。
+
+## 3.`menuconfig`
+
+**错误：*
+
+```cmd
+Administrator@WIN-C9KO8HH41MM D:\00_software\62_RT-ThreadStudio\workspace\P3L4GprsMod
+$ menuconfig
+Kconfig:3:warning: environment variable BSP_ROOT undefined
+Kconfig:8:warning: environment variable RTT_ROOT undefined
+Kconfig:18:warning: environment variable PLATFORM_DIR undefined
+D:\00_software\62_RT-ThreadStudio\platform\env_released\env\tools\ConEmu\ConEmu\..\..\..\packages/packages/system/rti/Kconfig:88: 'endif' in different file than 'if'
+D:\00_software\62_RT-ThreadStudio\platform\env_released\env\tools\ConEmu\ConEmu\..\..\..\packages/packages/system/rti/Kconfig:9: location of the 'if'
+D:\00_software\62_RT-ThreadStudio\platform\env_released\env\tools\ConEmu\ConEmu\..\..\..\packages/packages/system/Kconfig:61: 'endmenu' in different file than 'menu'
+D:\00_software\62_RT-ThreadStudio\platform\env_released\env\tools\ConEmu\ConEmu\..\..\..\packages/packages/system/rti/Kconfig:9: location of the 'menu'
+D:\00_software\62_RT-ThreadStudio\platform\env_released\env\tools\ConEmu\ConEmu\..\..\..\packages/packages/Kconfig:15: 'endmenu' in different file than 'menu'
+D:\00_software\62_RT-ThreadStudio\platform\env_released\env\tools\ConEmu\ConEmu\..\..\..\packages/packages/system/rti/Kconfig:9: location of the 'menu'
+```
+
+**解决：**
+
+`menuconfig -s` 中的 `-s` 是 RT-Thread ENV 工具的**静默模式 / 跳过语法检查**参数（或简化模式），它会：
+
+1. 跳过 Kconfig 文件的严格语法校验（如 `if`/`endif` 跨文件、层级不匹配等）；
+2. 直接加载现有配置（`.config`），不重新解析完整的 Kconfig 依赖链；
+3. 因此即使 Kconfig 存在语法瑕疵，`menuconfig -s` 仍能运行，而普通 `menuconfig` 会严格校验语法，触发错误。
+
+简单说：`-s` 模式 “忽略” 了 Kconfig 的语法问题，而非问题不存在。
+
 # ——常用组件——
+
+# 日志打印
+
+## 1.文件位置
+
+```bash
+rt-thread\include\rtdbg.h
+```
+
+## 2.分块打印
+
+### 1.示例
+
+```bash
+[D/pub][20180101 08:00:00]: *********read  a  sector start
+[D/main] Hello RT-Thread!
+```
+
+### 2.原理
+
+利用C编译时是先对每个源文件进行编译然后再链接，已经对宏定义进行替换的原理。
+
+因此对
+
+```c
+#define DBG_TAG "main"
+#define DBG_LVL DBG_LOG
+```
+
+的定义一定放在`.c`文件中，`.c`文件单独编译，相互独立互不影响，而`.h`可能会被多个源文件包含，最后宏定义的值被替换为最后定义这两个宏的位置。
+
+### 3.注意事项
+
+```c
+#define DBG_TAG "main"
+#define DBG_LVL DBG_LOG//宏定义一定位于头文件之前
+#include <rtdbg.h>
+LOG_D("123\n");//一定要先定义DBG_TAG和DBG_LVL才能用
+```
+
