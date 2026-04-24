@@ -363,3 +363,64 @@ sudo vi ~/.gitconfig
 # 设置文件属性
 
 [git配置文件—— .gitattributes - qiqi715 - 博客园](https://www.cnblogs.com/qiqi715/p/9286468.html)
+
+## 1.LF 和 CRLF 
+
+它们是**电脑里表示「换一行」的隐藏符号**，
+
+本质就是：**不同操作系统，对「怎么标记换行」的规矩不一样**。
+
+------
+
+## 2. 两个符号的区别
+
+### ①` LF` = `\n`
+
+**全称：Line Feed（换行）**
+
+👉 **Linux 系统、Mac 电脑** 默认用的换行符
+
+👉 只用 **1 个符号** 表示换行
+
+### ② `CRLF `= `\r\n`
+
+**全称：Carriage Return + Line Feed（回车 + 换行）**
+
+👉 **Windows 电脑** 默认用的换行符
+
+👉 用 **2 个符号** 表示换行
+
+------
+
+## 3. 为什么 Git 要管这个
+
+因为：
+
+- 用 **Windows** → 文件默认 `CRLF`
+- 服务器 / 别人用 **Linux/Mac** → 文件默认` LF`
+
+Git 会自动转换换行符，
+
+结果就是：
+
+**文件内容明明没改，却显示 modified（被修改）**
+
+这就是 **换行符冲突**。
+
+------
+
+## 4. 该怎么配置
+
+### 1.windows
+
+```bash
+git config --global core.autocrlf true
+
+#意思：提交时自动转 LF，拉取时自动转 CRLF → 不报错
+```
+
+### 2.Mac/Linux
+
+```bash
+git config --global core.autocrlf input
+```
