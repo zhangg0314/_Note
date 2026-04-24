@@ -1,3 +1,33 @@
+# 配置文件
+
+## 1.路径
+
+```shell
+gui/conf/
+```
+
+## 2.轮显配置相关
+
+```shell
+shift-xxx.xml
+```
+
+## 3.相关函数
+
+```c++
+ *  文件: shiftdataforms.cpp
+ *  函数名称:   SetDisplayData
+ *  函数描述:   基于XML配置的按显数据、轮显数据实现
+ *  输入参数:   pResume: 从shift-*.xml 中读出映射到的数据结构, _form_num: 数据显示屏数,
+ *              _mpno: 测量点号, _querytime: 历史数据的查询时间戳,
+ *              _isCyclicShift: true 代表轮显, false 代表按显
+ *  输出参数:   pResume: 从shift-*.xml 中读出映射到的数据结构
+ *  返 回 值:   无
+ *  其它说明:   无
+```
+
+
+
 # 设计特性
 
 - **模块化设计**：将功能分离（如渲染、事件处理、布局），提高代码可维护性。
