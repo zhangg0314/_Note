@@ -73,7 +73,7 @@ gcc -L 	#指定库的路径
 
 直接指定多个源码文件（如`gcc a.c b.c -o app`），或先编译为.o 再链接（适合大型项目）。
 
-## 4. 配套工具
+## 4.配套工具
 
 ```shell
 nm #查看符号表
@@ -82,7 +82,7 @@ gcov #代码覆盖率分析
 ldd #查看可执行文件依赖的库
 ```
 
-## 		5条件编译
+## 		5.条件编译
 
 好处：通过命令传宏来决定执行哪些代码，省的总注释来注释去的，即相当于一个开关，常用于底层开发代码中。
 
@@ -716,3 +716,369 @@ q    #-->    quit的缩写，作用是退出调试
 ## 5.参考链接
 
 [gdb+gdbserver远程调试环境搭建及调试_gdb server-CSDN博客](https://blog.csdn.net/m0_56121792/article/details/133160361)
+
+# VSCode调试配置
+
+## 1.本地交叉编译代码
+
+### 1.编写测试代码
+
+新建项目目录（如`~/embedded_debug`），创建`main.c`：
+
+```c
+#include <stdio.h>
+
+int add(int a, int b) {
+    return a + b; // 此处可打断点
+}
+
+int main() {
+    int x = 10, y = 20;
+    int res = add(x, y);
+    printf("Result: %d\n", res);
+    return 0;
+}
+```
+
+### 2. 编写 Makefile
+
+在项目目录创建`Makefile`，指定交叉编译器和**`-g`调试参数**（必须加，否则无法调试）：
+
+```makefile
+# 交叉编译器（根据实际工具链修改）
+CC = arm-linux-gnueabihf-gcc
+# 编译参数：-g 生成调试信息，-O0 关闭优化（避免调试时代码乱序）
+CFLAGS = -g -O0
+# 目标可执行文件名称
+TARGET = test_app
+
+# 编译规则
+all: $(TARGET)
+
+$(TARGET): main.c
+    $(CC) $(CFLAGS) -o $(TARGET) main.c
+
+# 清理编译产物
+clean:
+    rm -rf $(TARGET)
+```
+
+### 3.本地编译
+
+在 VSCode 终端执行编译
+
+```bash
+make
+```
+
+编译完成后，目录下会生成`test_app`（带调试信息的交叉编译产物）。
+
+## 2.VSCode 自动上传到开发板
+
+通过 VSCode 的`tasks.json`配置「编译后自动上传」，避免手动执行`scp`。
+
+### 1. 生成 tasks.json
+
+- 打开 VSCode，按`Ctrl+Shift+B` → 选择「创建 tasks.json 文件」 → 选择「Others」，生成基础模板。
+
+- 替换为以下内容（修改开发板 IP、用户名、上传路径）
+
+  ```json
+  {
+      "version": "2.0.0",
+      "tasks": [
+          // 任务1：编译代码（执行make）
+          {
+              "label": "build",
+              "type": "shell",
+              "command": "make",
+              "args": [],
+              "group": {
+                  "kind": "build",
+                  "isDefault": true
+              },
+              "problemMatcher": "$gcc",
+              "detail": "交叉编译代码"
+          },
+          // 任务2：上传编译产物到开发板（依赖build任务）
+          {
+              "label": "upload",
+              "type": "shell",
+              "command": "scp",
+              "args": [
+                  "${workspaceFolder}/test_app", // 本地编译产物路径
+                  "root@192.168.1.100:/root/"    // 开发板IP + 目标路径（修改为实际值）
+              ],
+              "dependsOn": "build", // 先编译，再上传
+              "problemMatcher": [],
+              "detail": "上传可执行文件到开发板"
+          }
+      ]
+  }
+  ```
+
+### 2.执行上传
+
+按`Ctrl+Shift+B` → 选择「upload」，VSCode 会先编译代码，再自动将`test_app`上传到开发板`/root/`目录。
+
+### 3.选择任务运行
+
+在 VSCode 中选择并执行指定任务，核心有**图形化操作**（直观）、**快捷键 / 命令面板**（高效）、**调试前置自动执行**（自动化）三种方式，以下是详细步骤（基于前文的 tasks.json 配置）
+
+#### 1.图形化操作
+
+##### 1. 打开任务列表
+
+- 方式 1：顶部菜单栏 → 「终端」 → 「运行任务」（Terminal → Run Task...）；
+- 方式 2：右键点击 VSCode 左侧「资源管理器」的项目文件夹 → 选择「运行任务」。
+
+##### 2. 选择要执行的任务
+
+- 弹出的任务列表中会显示你在`tasks.json`中定义的所有`label`（如`build`、`upload`、`start_gdbserver`、`deploy`等）；
+- 点击目标任务（如`upload`），VSCode 会立即执行该任务：
+  - 若任务有依赖（如`upload`依赖`build`），会自动先执行依赖任务，再执行目标任务；
+  - 执行过程会在底部「终端」面板输出日志，可查看执行结果 / 错误。
+
+##### 3. 可选：跳过任务确认
+
+首次执行任务时，可能会弹出「是否扫描任务输出中的问题」的确认框，选择：
+
+- 「每次运行任务时询问」：每次执行都弹窗；
+- 「允许每次运行时扫描」：默认扫描，不弹窗；
+- 「不扫描」：仅执行命令，不解析输出（适合纯上传 / 启动类任务）。
+
+#### 2.快捷键 / 命令面板
+
+##### 1. 基础快捷键：Ctrl+Shift+B
+
+- 按下快捷键后，直接弹出任务选择列表（和「运行任务」效果一致）；
+- 用方向键↑↓选择目标任务（如`start_gdbserver`），按 Enter 执行。
+
+##### 2. 命令面板精准筛选
+
+- 按下`Ctrl+Shift+P`，打开命令面板；
+- 输入关键词「Tasks: Run Task」，回车后弹出任务列表；
+- 若任务较多，可在列表中输入任务名称（如`upload`）快速筛选，回车执行。
+
+#### 3.设置默认任务
+
+如果某任务（如`upload`或`deploy`）是日常最常用的，可将其设为「默认构建任务」，按下`Ctrl+Shift+B`后直接执行，无需选择。
+
+##### 1.配置方法
+
+1. 打开`tasks.json`，找到目标任务（如`deploy`），在其`group`字段中添加配置：
+
+   ```json
+   {
+       "label": "deploy",
+       "type": "shell",
+       "command": "...",
+       "group": {
+           "kind": "build", // 归类为「构建任务」
+           "isDefault": true // 设置为默认任务
+       },
+       "detail": "默认部署任务"
+   }
+   保存后，按下`Ctrl+Shift+B`，VSCode 会直接执行该默认任务（无需选择列表）；
+   
+   若要取消默认，将`isDefault`改为`false`即可。
+   ```
+
+## 3.启动开发板的 gdbserver
+
+gdbserver 的作用是在开发板上监听端口，等待本地 GDB 连接，有两种启动方式：
+
+### 1. 手动启动
+
+1. 本地通过 SSH 登录开发板：
+
+   ```bash
+   ssh root@192.168.1.100
+   ```
+
+2. 开发板端执行（指定监听端口，如 1234，以及可执行文件路径）：
+
+   ```bash
+   cd /root/
+   # gdbserver :端口 可执行文件
+   gdbserver :1234 ./test_app
+   ```
+
+   正常输出：
+
+   ```plaintext
+   Process ./test_app created; pid = 12345
+   Listening on port 1234
+   ```
+
+### 2.VSCode 自动启动
+
+若不想手动登录开发板启动 gdbserver，可在`tasks.json`新增「启动 gdbserver」任务（依赖 upload）：
+
+```json
+// 在tasks.json中新增
+{
+    "label": "start_gdbserver",
+    "type": "shell",
+    "command": "ssh",
+    "args": [
+        "root@192.168.1.100",
+        "cd /root/ && gdbserver :1234 ./test_app"
+    ],
+    "dependsOn": "upload",
+    "problemMatcher": [],
+    "detail": "远程启动gdbserver"
+}
+```
+
+## 4.配置 VSCode launch.json
+
+`launch.json`是 VSCode 调试的核心配置，用于指定本地交叉 GDB 路径、开发板 gdbserver 地址、调试文件等。
+
+### 1. 生成 launch.json
+
+- VSCode 左侧点击「运行和调试」→ 「创建 launch.json 文件」→ 选择「C/C++ (GDB/LLDB)」。
+
+- 替换为以下内容（根据实际环境修改标注的参数）
+
+  ```json
+  {
+      // 使用 IntelliSense 了解相关属性。 
+      // 悬停以查看现有属性的描述。
+      // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+      "version": "0.2.0",//配置文件版本号，VSCode 调试系统的兼容版本，固定写 0.2.0 即可（无需修改），确保配置格式被 VSCode 正确解析。
+      "configurations": [//调试配置数组，数组中每个元素是一个独立的调试配置项（可在 VSCode 调试面板下拉框切换选择）。
+          
+          //这是 VSCode 自动生成的本地 x86 程序调试模板，未实际适配你的 ARM 场景，仅作为默认占位，以下逐字段解析：
+          {
+              "name": "(gdb) 启动",//"(gdb) 启动"：标识这是本地 GDB 启动调试的默认配置。
+              "type": "cppdbg",//"调试器类型cppdbg"：指定用 GDB 调试 C/C++ 程序。
+              "request": "launch",//"launch"：启动新程序调试。- launch：启动新程序并调试（最常用）；
+                                                           //- attach：附加到已运行的进程进行调试。
+              "program": "输入程序名称，例如 ${workspaceFolder}/a.out",//要调试的可执行文件路径（必须是带 -g 调试信息的编译产物）。
+              "args": [],//程序运行时的命令行参数，数组形式，每个元素是一个参数。
+              "stopAtEntry": false,//是否在程序入口点（main 函数）自动暂停，方便调试启动流程。
+              "cwd": "${fileDirname}",//	调试时的工作目录（程序运行时的当前路径），影响文件读写（如相对路径加载配置）。
+              "environment": [],//调试时的环境变量，数组形式，每个元素是 {"name": "变量名", "value": "值"}。
+              "externalConsole": false,//	是否弹出外部终端窗口运行程序（而非 VSCode 内置终端）。
+              "MIMode": "gdb",//指定调试器的机器接口（MI）模式，VSCode 通过 MI 协议和调试器交互；gdb 对应 GDB，lldb 对应 LLDB。
+              "setupCommands": [//调试启动前自动执行的 GDB 命令，用于初始化 GDB 行为。
+                  {
+                      "description": "为 gdb 启用整齐打印",
+                      "text": "-enable-pretty-printing",
+                      "ignoreFailures": true
+                      //GDB 命令（-enable-pretty-printing 启用结构体 / STL 容器的美观打印，避免乱码）
+                  },
+                  {
+                      "description": "将反汇编风格设置为 Intel",
+                      "text": "-gdb-set disassembly-flavor intel",
+                      //将反汇编代码风格设为 Intel（默认是 AT&T，更符合嵌入式开发者习惯）；
+                      "ignoreFailures": true//忽略命令失败。
+                  }
+              ]
+          },
+          //===============================================================================================
+          {
+              "name": "arm-linux-gnueabihf-gcc build",
+              "type": "cppdbg",
+              "request": "launch",
+              //本地带调试符号的可执行文件路径（核心！）。
+              //远程调试的关键逻辑：
+  			//- 程序实际在开发板运行，但 GDB 的「符号表」依赖本地文件（必须和开发板上的程序完全一致，且编译时加 -g -O0）；
+  			//- 若本地无此文件，GDB 无法解析断点、变量名等调试信息。
+              "program": "${workspaceFolder}/debian/terminaloop/home/app/dlmsd",
+              "args": [],//开发板上程序运行的命令行参数。
+              "stopAtEntry": false, //是否在程序入口（main）自动暂停。
+              
+              //调试时的工作目录（对应开发板上程序的工作目录），确保程序加载相对路径文件（如配置、日志）时路径一致。
+              //"cwd": "${workspaceFolder}/build/Debug/bin/ExampleSrv/",
+              "cwd": "${workspaceFolder}/debian/terminaloop/home/app/",//通过目录映射到开发板
+              "environment": [],
+              "targetArchitecture": "arm",//指定目标程序的 CPU 架构，帮助 VSCode 适配调试体验（如反汇编、寄存器显示、内存布局）。
+              "externalConsole": false,
+              "MIMode": "gdb",
+              "logging": {//	调试日志配置，用于排查调试异常（如连接失败、断点不命中）。
+                  "engineLogging": false,
+              },
+              "setupCommands": [
+                  {
+                      "description": "为 gdb 启用整齐打印",
+                      "text": "-enable-pretty-printing",
+                      "ignoreFailures": false
+                  },
+                  {
+  //设置 GDB 的「系统根目录」，作用是让本地交叉 GDB 找到 ARM 架构的库文件（如 libc.so），解析库中的符号（避免调试时提示「找不到库符号」）；
+  //"text": "set sysroot /home/zhangg/English_698/sg698/debian/terminaloop/home/app"：指向本地存放 ARM 库的目录；
+                      "description": "sysroot",
+                      //"text": "set sysroot remote",
+  1.避免手动同步开发板的库文件到本地（减少维护成本）；
+  2.确保 GDB 读取的库文件和开发板上完全一致（避免本地库版本和开发板不一致导致的调试异常）；
+  3.简化配置：无需记住本地 sysroot 路径，直接从开发板拉取。
+                      //"text": "set sysroot remote:/usr/local/extapps/desktopGui/bin",
+                      "text": "set sysroot /home/zhangg/English_698/sg698/debian/terminaloop/home/app",
+                      "ignoreFailures": false//此命令必须成功，否则库函数断点无法命中。
+                  }
+                  //{
+                  //    "description": "follow-fork-mode",
+                  //    "text": "set follow-fork-mode child",
+                  //    "ignoreFailures": true
+                  //}
+              ],
+              
+              //C++ STL 容器可视化配置文件路径（.natvis 格式），让调试时 vector/map 等容器以直观形式显示（而非内存地址）。
+              "visualizerFile": "/home/zhangg/.vscode-server/stl.natvis",
+              
+              //是否显示 STL 容器的「友好描述字符串」（如 vector<int> [size=3] 而非原始内存）。
+              "showDisplayString": true,
+              
+              //调试启动前自动执行的 VSCode 任务（被注释），通常用于「自动启动开发板的 gdbserver」（无需手动 SSH 登录启动）。
+              //"preLaunchTask": "start gdbserver",
+              
+              //本地交叉 GDB 的绝对路径（核心！），必须使用和开发板架构匹配的交叉 GDB，而非本地 x86 GDB。
+              //"miDebuggerPath": "/mnt/e/component/gdb-8.3.1/install/bin/arm-linux-gnueabihf-gdb",
+              "miDebuggerPath": "/opt/ext-toolchain/bin/arm-linux-gnueabihf-gdb",
+              //"miDebuggerPath": "/mnt/e/component/gcc-linaro-4.9-2016.02-x86_64_arm-linux-gnueabihf/bin/arm-linux-gnueabihf-gdb",
+              
+              
+              //开发板上 gdbserver 的IP + 端口，是本地 GDB 连接开发板的核心地址。
+              "miDebuggerServerAddress": "192.168.65.187:1234",
+              
+              //核心转储文件（coredump）路径，用于调试程序崩溃问题（被注释）
+              //  "coreDumpPath": "/home/tancan/wango/ModularizationTerminal/build/allwinner/Debug/bin/test.dump"
+          }
+      ]
+  }
+  ```
+
+### 2.开始远程调试
+
+#### 1. 启动调试
+
+- 若用「方式 1 手动启动 gdbserver」：确保开发板的 gdbserver 已监听 1234 端口。
+- VSCode 左侧「运行和调试」→ 选择「Remote GDB Debug」→ 点击绿色三角启动调试。
+
+#### 2. 调试操作
+
+- 在`main.c`的`add`函数行打断点（点击行号左侧）。
+- 调试启动后，程序会停在断点处，可执行以下操作：
+  - 单步执行（F10）、步入函数（F11）、步出函数（Shift+F11）。
+  - 查看变量：左侧「变量」面板可查看`x`、`y`、`res`的值。
+  - 修改变量：右键变量→「设置值」，手动修改后继续执行。
+  - 控制台输出：「调试控制台」可查看程序运行日志。
+
+## 5.常见问题排查
+
+1. **gdbserver 连接失败**：
+   - 检查开发板 IP 是否可达（`ping 开发板IP`）。
+   - 检查开发板防火墙是否关闭（`iptables -F`），或开放 1234 端口。
+   - 确保 gdbserver 和本地 GDB 版本匹配（版本差异可能导致连接失败）。
+2. **断点不命中 / 提示 “无调试信息”**：
+   - 编译时未加`-g`参数，或加了`-O2/-O3`优化（需改为`-O0`）。
+   - `launch.json`中`program`路径指向的不是本地带调试信息的文件。
+3. **架构不匹配**：
+   - `launch.json`中`set architecture`配置错误（ARM32 填`arm`，ARM64 填`aarch64`）。
+   - 交叉编译工具链与开发板架构不匹配（如用 ARM64 工具链编译 ARM32 代码）。
+4. **scp 上传失败**：
+   - 检查开发板 SSH 服务是否开启（`systemctl status sshd`）。
+   - 检查本地用户是否有开发板目标路径的写入权限。
+
