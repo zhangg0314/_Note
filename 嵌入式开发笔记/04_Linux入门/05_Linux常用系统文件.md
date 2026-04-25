@@ -38,10 +38,6 @@ dmesg | grep AT91SAM9 #SOC平台
 Machine model: Atmel AT91SAM9G25-EK
 ```
 
-
-
-
-
 # ——etc——
 
 # /etc目录

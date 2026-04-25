@@ -425,7 +425,7 @@ mkdir -p /tmp/zhangg
 /usr/bin/sshfs \
   -o ssh_command='sshpass -p zg2025 ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o ConnectTimeout=10' \
   -o allow_other,default_permissions,charset=utf-8,uid=0,gid=0,cache=yes \
- zhangg@10.0.3.100:/home/zhangg/ModularizationTerminal/build/allwinner/Debug/bin \
+ zhangg@10.0.3.99:/home/zhangg/menggu/sg698/debian/tmp/usr/bin \
   /tmp/zhangg
 # 4. 验证挂载结果
 if [ $? -eq 0 ]; then
@@ -498,6 +498,16 @@ umount -lf /tmp/zhangg
 | `rsync` |     离线可用、增量同步     |     非实时、需手动触发     |   开发板离线调试、网络不稳定场景    |
 |  `SCP`  |       简单、单次拷贝       |  无实时同步、频繁拷贝易错  |       单次文件传输、临时调试        |
 
-# —— samba——
+# —— samba网络映射——
 
 [Windows上将linux目录映射网络驱动器 - liqinglucky - 博客园 (cnblogs.com)](https://www.cnblogs.com/liqinglucky/p/samba.html)
+
+```shell
+[public] #windows上填写的需要映射的目录名称别名
+        path = /fdsk #需要映射的目录
+        public = yes
+        writeable = yes
+        browseable = yes
+        guest ok = yes
+```
+
