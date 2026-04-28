@@ -6,7 +6,7 @@
 
 # U-Boot的DM
 
-## 1.概念
+## 1. 概念
 
 DM (Driver Model) 是 U-Boot 标准的 device-driver 开发模型，跟 kernel 的 device-driver 模型非常类似。
 
@@ -23,11 +23,11 @@ interface to it.
 Device - an instance of a driver, tied to a particular port or peripheral.
 ```
 
-## 2.与Linux驱动的差异
+## 2. 与Linux驱动的差异
 
 U-Boot 和 Linux 内核在设备驱动初始化机制上的一个核心差异就是：**U-Boot 不会自动探测和初始化设备，必须由开发者在代码中显式调用 probe 函数来激活驱动**。具体可以从以下几个方面理解：
 
-### 1. Linux 内核自动 probe
+### 2.1 Linux 内核自动 probe
 
 在 Linux 内核中，当系统启动时：
 
@@ -37,7 +37,7 @@ U-Boot 和 Linux 内核在设备驱动初始化机制上的一个核心差异就
 
 整个过程是 “全自动” 的，开发者不需要手动编写代码触发 probe，内核框架会处理好一切。
 
-### 2. U-Boot 手动 probe
+### 2.2 U-Boot 手动 probe
 
 在 U-Boot 中：
 
@@ -55,7 +55,7 @@ U-Boot 和 Linux 内核在设备驱动初始化机制上的一个核心差异就
 
 - 只有执行了这些主动调用，驱动的 probe 函数才会被执行，设备才会被初始化
 
-## 3.probe实现源码分析
+## 3. probe实现源码分析
 
 `device_probe()` 是 U-Boot 设备模型中最核心的函数之一，负责完成设备的初始化工作。它的主要作用是将设备（`struct udevice`）与驱动（`struct driver`）绑定，并执行一系列初始化操作，最终调用驱动的 `probe` 函数激活设备。以下是逐段代码的详细解释：
 
@@ -205,11 +205,11 @@ fail:
 
 # U-Boot的FIT
 
-## 1.核心实现原理
+## 4. 核心实现原理
 
 FIT 格式在不同架构芯片中实现硬件兼容性的核心逻辑是 **“用设备树语法描述‘镜像组件与硬件的匹配关系’，再通过 U-Boot 运行时的硬件检测动态选择适配组件”**。这种机制与芯片架构（如 ARM、PowerPC、RISC-V）无关，而是通过一套通用的 “兼容性标识 + 匹配算法” 实现跨架构适配。无论芯片架构是 ARM（如瑞芯微 RK3506）、PowerPC（如 NXP MPC85xx）还是 RISC-V，FIT 都通过以下机制保证兼容性：
 
-### 1. 组件标记
+### 4.1 组件标记
 
 FIT 镜像中的每个组件（如 U-Boot 主程序、设备树）都通过 **“compatible” 属性** 标记它支持的硬件，格式与设备树中的 `compatible` 字段一致（这是跨架构兼容的关键）。例如：
 
@@ -218,7 +218,7 @@ FIT 镜像中的每个组件（如 U-Boot 主程序、设备树）都通过 **�
 
 这些标签直接对应硬件的 “身份标识”，与架构无关。
 
-### 2. 硬件检测
+### 4.2 硬件检测
 
 U-Boot 的SPL启动时，会通过两种方式获取当前硬件的 “身份标识”：
 
@@ -235,7 +235,7 @@ U-Boot 的SPL启动时，会通过两种方式获取当前硬件的 “身份标
 
 表示 “这是 RK3506 芯片的评估板”。
 
-### 3. 匹配算法
+### 4.3 匹配算法
 
 U-Boot 会将硬件的 “身份标识”（如 `rockchip,rk3506-evb`）与 FIT 镜像中组件的 `compatible` 标签进行比对，遵循 **“最长前缀匹配” 原则**：
 
@@ -244,11 +244,11 @@ U-Boot 会将硬件的 “身份标识”（如 `rockchip,rk3506-evb`）与 FIT 
 
 这种算法与架构无关，仅依赖文本字符串比对，确保在任何架构下都能工作。
 
-## 2.`.its`文件
+## 5. `.its`文件
 
 `.its` 文件（Image Tree Source）是描述 FIT（Flattened Image Tree）镜像结构的**源文件**，采用类似设备树（DTS）的语法，用于定义 FIT 镜像包含的组件（如内核、设备树、固件）、配置信息和兼容性规则。最终通过 `mkimage` 工具编译为 `.itb` 二进制文件（FIT 镜像）。
 
-### 1.文件的基本结构
+### 5.1 文件的基本结构
 
 ```dts
 /dts-v1/;  // 版本声明
@@ -281,14 +281,14 @@ U-Boot 会将硬件的 “身份标识”（如 `rockchip,rk3506-evb`）与 FIT 
 - `images`：存放所有二进制组件（如内核、设备树、ramdisk），每个组件有唯一标识（如 `image@1`）。
 - `configurations`：定义组件的组合方式（如 “用内核 A + 设备树 B 启动”），U-Boot 会根据硬件兼容性选择合适的配置。
 
-### 2.核心语法与属性详解
+### 5.2 核心语法与属性详解
 
-#### 1. 全局属性（根节点）
+#### 5.2.1 全局属性（根节点）
 
 - `description`：FIT 镜像的描述文本（如 `"U-Boot FIT for RK3506"`），用户自定义，可以随便写。
 - `#address-cells` 和 `#size-cells`：指定地址和大小字段的单元格数量（通常设为 `<1>` 或 `<2>`，与硬件地址宽度匹配）。
 
-#### 2. 定义组件（`images` 节点）
+#### 5.2.2 定义组件（`images` 节点）
 
 每个组件（如内核、设备树）是 `images` 的子节点，需指定以下关键属性：
 
@@ -305,7 +305,7 @@ U-Boot 会将硬件的 “身份标识”（如 `rockchip,rk3506-evb`）与 FIT 
 |    `hash`     |             哈希校验（可选，用于验证组件完整性）             |                `sha256` { value = "xxx"; };                 |
 | `compatible`  | 组件支持的硬件（用于兼容性匹配，类似设备树的 `compatible`）  |         `"rockchip,rk3506-evb", "rockchip,rk3506"`          |
 
-#### 3. 定义配置（`configurations` 节点）
+#### 5.2.3 定义配置（`configurations` 节点）
 
 配置节点用于组合 `images` 中的组件，告诉 U-Boot “如何使用这些组件启动”。每个配置需指定：
 
@@ -317,7 +317,7 @@ U-Boot 会将硬件的 “身份标识”（如 `rockchip,rk3506-evb`）与 FIT 
 |  `firmware`   | 引用 `images` 中的固件组件（如 U-Boot 镜像） |          `"uboot@1"`          |
 | `compatible`  |   该配置支持的硬件（用于 U-Boot 选择配置）   |    `"rockchip,rk3506-evb"`    |
 
-#### 4.哈希与签名（ 高级特性）
+#### 5.2.4 哈希与签名（ 高级特性）
 
 `.its` 支持为组件添加哈希校验或数字签名，用于验证完整性和安全性（需 U-Boot 开启 `CONFIG_FIT_SIGNATURE`）。
 
@@ -338,7 +338,7 @@ images {
 };
 ```
 
-### 3.组件定义示例
+### 5.3 组件定义示例
 
 定义一个内核组件和一个设备树组件示例如下：
 
@@ -367,7 +367,7 @@ images {
 };
 ```
 
-### 4.定义默认配置示例
+### 5.4 定义默认配置示例
 
 ```dts
 configurations {
@@ -381,7 +381,7 @@ configurations {
 };
 ```
 
-### 5.文件完整示例
+### 5.5 文件完整示例
 
 ```dts
 /dts-v1/;
@@ -427,7 +427,7 @@ configurations {
 };
 ```
 
-### 6.编译 .its 为 .itb
+### 5.6 编译 .its 为 .itb
 
 通过 U-Boot 提供的 `mkimage` 工具将 `.its` 编译为 `.itb` 镜像：
 
