@@ -6,24 +6,199 @@ Bootloader是在操作系统运行之前运行的一小段代码，用于将软�
 
 # 引导程序基本功能
 
-- 初始化软硬件环境
-- 引导加载Linux内核
+- 初始化软硬件环境，如时钟、内存、串口、存储、网络等。
+- 提供调试与维护功能：如环境变量配置、固件升级、网络引导、烧写命令等。
+- 引导加载Linux内核，通常是 Linux 内核，并传递启动参数、设备树等必要信息。
 - 给Linux内核传参
 - 执行用户命令（如U-Boot命令）
 
 ------
 
+# U-Boot启动经过
+
+第一阶段：初始化时钟，关闭看门狗，关中断，关闭MMU，TLB，DCACHE，ICACHE等初始化SDRAM，初始化NAND FLASH等。
+
+[u-boot分析（五）----I/D cache失效|关闭MMU和cache|关闭看门狗 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4222669.html)
+
+```txt
+首先，我们为何要关闭mmu？mmu负责从虚拟地址到物理地址之间的转换，
+但是我们现在的汇编都是直接操作物理寄存器， 此时如果打开了mmu，而我们并没有有效的TLB，这样cpu可以说是胡乱运行的，
+所以我们需要关闭mmu，不需要它转换地址，直接操作寄存器方便快捷。 
+然后，再发出灵魂拷问，为何要关闭cache？因为cache和MMU是通过cp15管理的，刚上电的时候，CPU并不能管理他们。
+所以上电的时候mmu必须关闭，指令cache可关闭，可不关闭，但数据cache一定要关闭， 否则可能导致刚开始的代码里面，
+去取数据的时候，从cache里面取，而这时候RAM中数据还没有cache过来，导致数据预取异常。
+```
+
+第二阶段：初始化一个串口，检测系统内存映射，将内核映像和根文件系统映像从Flash上读到DRAM空间中，为内核**设置启动参数**，调用内核。
+
 # U-Boot初始化流程
 
+<<<<<<< HEAD:嵌入式开发笔记/08_Linux系统移植与驱动开发/03_U-Boot基础与移植.md
 ## 1. U-Boot启动过程
 
 ### 1.1 总体启动流程
+=======
+在嵌入式 Linux  系统开发、BSP 适配及新平台 bring-up 过程中，Bootloader 的启动流程往往决定了整个系统移植和硬件支持的复杂度。U-Boot 作为当前主流的开源 Bootloader，其启动流程又分为带 SPL（Secondary Program Loader）与不带 SPL两种模式。不同方案在硬件要求、启动机制、代码结构、调试思路等方面存在明显区别。
 
-**参考**：[U-Boot Bring Up：有 SPL 与无 SPL 的启动流程深度解析_uboot spl-CSDN博客](https://blog.csdn.net/Interview_TC/article/details/148305552)
+## 1.总体启动流程
+>>>>>>> 4e12916e1604a710d1d0bc9b5ea4e21bc4dc120b:嵌入式开发笔记/08_Linux系统移植与驱动开发/03_U-Boot相关知识.md
 
+以 ARM Cortex-A SoC（如 NXP i.MX6/8, Allwinner, Rockchip , STM32MP1 等）为例，完整启动链路如下：
+
+<<<<<<< HEAD:嵌入式开发笔记/08_Linux系统移植与驱动开发/03_U-Boot基础与移植.md
 ### 1.2 无SPL的一个疑问
 
 #### 1.2.1 执行过程
+=======
+### 1.有 SPL 的启动流程
+
+BootROM (SoC内部固件) → SPL (精简U-Boot) → U-Boot (完整版) → Linux Kernel → RootFS → User Application
+
+### 2.无 SPL 的启动流程
+
+BootROM (SoC内部固件) → U-Boot (完整版) → Linux Kernel → RootFS → User Application
+
+### 3.BootROM 与 SPL 的职责区别
+
+- BootROM
+  不可更改，由芯片原厂烧录在 SoC 内部，只负责最基础的硬件初始化和“从外部介质加载 bootloader 到 SRAM/DRAM 并运行”。
+- SPL
+  U-Boot 的精简版，用于解决“内部SRAM容量有限，无法一次加载完整版 U-Boot”时的硬件初始化需求（如 DDR、时钟、简单外设）。
+- 完整版 U-Boot
+  具备命令行、丰富外设/协议栈支持，可做升级、调试、启动内核等。
+
+## 2.带 SPL 与无 SPL 的根本差异
+
+### 1.SPL 设计的核心动机
+
+#### 1.SPL 解决的核心问题
+
+SoC 上电后，可用的 SRAM 极其有限，无法直接放下大体积的 U-Boot。因此，必须先用极小的 SPL 初始化 DDR，之后将完整版 U-Boot 从外部介质加载到 DDR，再切换 到 U-Boot 运行。
+
+#### 2.场景举例
+
+典型 Cortex-A9/A53/A72 SoC，SRAM 只有 32KB/64KB/128KB，而完整版 U-Boot 动辄数百 KB 甚至上 MB。同时需要复杂 DRAM 初始化脚本，BootROM 能力有限。
+
+### 2.无 SPL 方案的条件
+
+SoC 内部 SRAM 或 BootROM 能直接完成 DDR 初始化。BootROM 能直接从存储加载大容量 U-Boot 到 DDR 并运行。
+U-Boot 镜像尺寸可以接受（如 NOR flash 启动、小型芯片/简单板卡）。
+
+#### 1.场景举例
+
+早期的 ARM9、ARM11、部分 Cortex-M4/M7，以及 MCU 级应用，内存需求不高。使用 NOR Flash，直接映射到地址空间，无需分段加载。BootROM 足够灵活/支持的 SoC（如部分 Allwinner、Rockchip、早期NXP平台等）。
+
+## 3.详细启动流程对比
+
+### 1.有 SPL 启动流程详解
+
+1. BootROM 执行：SoC 上电后，BootROM 按固定顺序检测外部存储（SD/eMMC/NAND/NOR/USB等），找到并加载 SPL 到 SRAM。
+2. SPL 阶段：初始化必要硬件（主要是时钟/DDR）。极简驱动，仅包含板级初始化和加载U-Boot代码的功能。加载完整 U-Boot 镜像到 DDR。跳转至 U-Boot：SPL 跳转到 DDR 内的 U-Boot 入口，后者接管控制权。
+
+3. U-Boot 主阶段：初始化更丰富的外设。提供 CLI/网络/升级/调试等功能。加载和启动 Linux 内核。操作系统启动。
+
+
+#### 1.核心代码片段（spl 入口流程示例）
+
+```c
+void board_init_f(ulong dummy)
+{
+    // 最小化硬件初始化
+    arch_cpu_init();
+    spl_init();
+    dram_init();
+    // 读取并加载主 U-Boot
+    spl_load_image();
+    jump_to_uboot();
+}
+```
+
+#### 2.SPL 配置（典型 Kconfig/defconfig）
+
+```config
+CONFIG_SPL=y
+CONFIG_SPL_FRAMEWORK=y
+CONFIG_SPL_SERIAL_SUPPORT=y
+CONFIG_SPL_DRIVERS_MISC_SUPPORT=y
+```
+
+### 2.无SPL 启动流程详解
+
+1. BootROM 执行：SoC 上电后，BootROM 直接从外部存储加载完整 U-Boot 镜像到内存（一般是 DDR）并执行。
+2. U-Boot 阶段：U-Boot 自行初始化全部硬件（包含 DDR）。后续流程同上：提供 CLI、升级、内核引导等功能。
+   操作系统启动。
+
+#### 1.核心代码片段（U-Boot 入口流程示例）
+
+```c
+void board_init_f(ulong dummy)
+{
+    // 直接初始化所有硬件
+    arch_cpu_init();
+    dram_init();
+    peripheral_init();
+    // 进入命令行或直接启动内核
+    main_loop();
+}
+```
+
+#### 2.配置特征
+
+.config 文件里无 CONFIG_SPL 相关选项。编译输出只有单个 U-Boot 镜像，无 u-boot-spl 文件。
+
+## 4.硬件与软件层面的适用分析
+
+### 1.带 SPL 的优势和适用场景
+
+适合中高端 SoC，SRAM 远小于 U-Boot 镜像体积。支持复杂的板级初始化需求（如多片 DDR、PMIC、丰富外设）。
+支持多存储介质和更灵活的启动策略。可拆分初始化流程，有利于分阶段调试和维护。
+
+### 2. 无 SPL 的优势和适用场景
+
+平台简单、硬件初始化需求低，BootROM 或 NOR Flash 直映射即可。启动速度快，代码复杂度低，适用于量产型、成本敏感的设计。有利于初学者和小型项目快速上手。
+
+## 5.开发实践建议
+
+### 1. 如何判断需要 SPL
+
+检查 SoC 文档“BootROM 支持的最大加载大小”“上电后可用的 SRAM/DRAM 初始化流程”。若 U-Boot 体积超过 BootROM 一次性可加载容量，必须引入 SPL。若平台/芯片厂商提供的参考 U-Boot 都有 SPL 分段，说明其硬件需要这种启动分阶段。
+
+### 2.编译与适配流程要点
+
+- 有 SPL
+  编译时会生成 u-boot-spl/u-boot-spl.bin，同时 u-boot/u-boot.bin/elf，烧录脚本须注意 SPL 与主镜像分区、拼接位置等。
+- 无 SPL
+  只有主镜像直接烧录，启动配置/烧写脚本更简单。
+
+### 3.调试和移植建议
+
+- 有 SPL 时遇到 DDR 问题，建议优先只修改/调试 SPL，主 U-Boot 尽量保持稳定。
+- 无 SPL 时，所有初始化和调试均集中于 U-Boot 代码，调试窗口更大但也更易出错。
+
+## 6.关键问答与实战案例
+
+```c
+Q1：我怎么判断我的平台当前用不用 SPL？
+查 .config/defconfig 是否有 CONFIG_SPL=y，或者编译输出目录有无 u-boot-spl。
+查阅官方 BSP 用户手册，查看推荐的启动分段方案。
+    
+Q2：什么情况下可以把 SPL 去掉，只用 U-Boot？
+硬件初始化极其简单，BootROM 能直接装载主 U-Boot 并执行（如 NOR Flash 映射）。
+平台定制需求低，工程团队能确认无后遗症。
+    
+Q3：SPL 和 U-Boot 如何协作传递信息？
+SPL 可通过 RAM、寄存器、中转地址等方式，传递板级信息、环境参数、校验结果。
+SPL 失败可直接回退或报错重启，利于早期调试。
+    
+Q4：如果引导流程挂死，如何排查是 SPL 还是 U-Boot 的问题？
+观察串口输出：SPL 阶段 log 是否输出，若 SPL 输出正常则重点排查 U-Boot；否则需定位 SPL 问题。
+可以定制 SPL 提示灯/蜂鸣器等硬件动作，辅助区分。
+```
+
+## 7..无SPL的一个疑问
+
+### 1.执行过程
+>>>>>>> 4e12916e1604a710d1d0bc9b5ea4e21bc4dc120b:嵌入式开发笔记/08_Linux系统移植与驱动开发/03_U-Boot相关知识.md
 
 ```bash
 #BootROM 执行： 
@@ -34,11 +209,15 @@ Bootloader是在操作系统运行之前运行的一小段代码，用于将软�
 	U-Boot镜像直接加载到DDR运行，那为啥U-boot后面还要初始化DDR？
 ```
 
+<<<<<<< HEAD:嵌入式开发笔记/08_Linux系统移植与驱动开发/03_U-Boot基础与移植.md
 #### 1.2.2 解释
+=======
+### 2.解释
+>>>>>>> 4e12916e1604a710d1d0bc9b5ea4e21bc4dc120b:嵌入式开发笔记/08_Linux系统移植与驱动开发/03_U-Boot相关知识.md
 
 这个问题的核心在于：**BootROM 对 DDR 的初始化可能是 “临时且有限的”，而 U-Boot 对 DDR 的初始化是 “完整且适配系统需求的”**。两者的目标和能力存在本质差异，具体原因如下：
 
-##### 1.BootROM 的 DDR 操作
+#### 1.BootROM 的 DDR 操作
 
 仅为 “加载镜像” 服务，而非 “完整使用”。BootROM 是 SoC 出厂时固化在芯片内部的极简程序，它的核心目标是 **“把 U-Boot 镜像从外部存储（如 eMMC、SPI Flash）加载到内存（DDR）并启动”**，而非 “为整个系统提供稳定可用的 DDR 环境”。其对 DDR 的操作通常有以下限制：
 
