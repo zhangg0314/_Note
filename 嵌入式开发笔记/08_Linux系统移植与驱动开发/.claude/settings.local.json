@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git mv *)",
+      "Bash(git rm *)",
+      "Bash(sed -i 's/^# ——初级驱动框架——$/# 字符设备驱动程序框架分析/' 08_字符设备驱动开发.md)",
+      "Bash(sed -i 's/^# ——驱动操作函数——$/# 常用操作函数说明/' 08_字符设备驱动开发.md)",
+      "Bash(sed -i 's/^# ——驱动并发控制——$/# 驱动并发控制/' 08_字符设备驱动开发.md)",
+      "Bash(sed -i 's/^# >>>>>>内核内存动态申请>>>>>>$/# 内核内存动态申请/' 08_字符设备驱动开发.md)",
+      "Bash(sed -i 's/^# ————虚拟总线————$/# platform 总线驱动（虚拟总线）/' 10_设备驱动分离与总线.md)",
+      "Bash(python)",
+      "Bash(perl -i -pe ' *)",
+      "Bash(git checkout *)",
+      "Bash(git reset *)",
+      "Bash(git clean *)",
+      "Bash(sed -i 's/^# ————实际总线————$/# I2C 总线驱动（实际总线）/' 10_设备驱动分离与总线.md)",
+      "Bash(sed -i \"s/^# \\\\\\([0-9]\\\\+\\\\\\)\\\\./# \\\\1 --/\" 08_字符设备驱动开发.md 10_设备驱动分离与总线.md)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)"
+    ]
+  }
+}
