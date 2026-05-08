@@ -123,3 +123,14 @@ sqlite> PRAGMA journal_mode = WAL;
 - “为每个线程分配独立连接”：这是解决**线程安全问题**的手段（避免共享连接导致的状态混乱），不能消除 `SQLite` 的写写互斥，但能为 “优雅处理冲突”（如重试）提供基础。
 
 两者指向的问题不同，因此并不矛盾。若要彻底避免 `SQLite` 的写写冲突，唯一的办法是**让所有写操作串行化**（如通过全局队列统一调度写请求），而独立连接只是确保这个串行化过程中不会出现线程安全问题。
+
+# 6.案例踩坑
+
+     Context
+    
+     CMeterArchive::ClearALLMtr() 在重置所有电表档案时，使用 system() 直接删除 /mtdpart0/DB3/ 整个目录和 record*.db等文件。但同时：
+     
+     - DatabaseManager 是单例模式（dlmsdb/include/DataBaseManager.h:53），进程生命周期内只创建一次，内部持有多个
+     shared_ptr<MeterDataDB>（使用 SQLiteCpp WAL 模式），连接一直保持不关闭
+     - ResetApp() 用 killall -9 杀进程，但 dlmsd、dlmsgather、gatherexe 被排除（未被杀）
+     - 结果：文件被删除后，旧连接仍指向已删除的 inode；新连接（重新打开的）看到新 inode → 数据分裂/不一致
