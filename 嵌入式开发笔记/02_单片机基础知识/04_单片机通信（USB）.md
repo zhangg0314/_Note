@@ -37,7 +37,7 @@ USB1.0和USB1.1支持1.5Mb/s的低速模式和12Mb/bs的全速模式。在USB2.0
 
 当 USB 设备接入系统时刻，系统通过检测 USB 上的 D+或者D- 线上的上拉电阻的方式来识别低速和全速设备。如下图所示，当主机端没有设备接入的时候，其D+和D-的下拉电阻使得其电压几乎为 0V；当全速/低速设备接入后，在D+或者D-端的上拉电阻会使得D+/D-出现高电平，而另外一根是低电平。主机端便知道有设备插入。
 
-![img](D:..\figure\c3226ba58a6555420d06f77dfefb1ab6.png)
+![img](../figure/c3226ba58a6555420d06f77dfefb1ab6.png)
 
 对于高速设备，和全速设备一样，在D+上存在上拉电阻，对于高速设备的的识别，主机先把高速设备检测为全速设备，然后再通过“Chirp 序列”的总线握手机制来识别高速和全速设备。
 
@@ -167,7 +167,7 @@ USB PHY 是 USB 通信的 “物理层执行者”，负责将数字逻辑信号
 
 USB包由五部分组成，即**同步字段（SYNC**）、**包标识符字段（PID）**、**数据字段**、**循环冗余校验字段（CRC）**和包结尾字段（EOP），包的基本格式如下图：
 
-![img](..\figure\8f9fc4429543b57dbd33b4e75d37be8e.png)
+![img](../figure/8f9fc4429543b57dbd33b4e75d37be8e.png)
 
 其中数据字段有三种：
 
@@ -181,7 +181,7 @@ USB包由五部分组成，即**同步字段（SYNC**）、**包标识符字段�
 
 **PID（Packet Identifier，包标识符）域**是 USB 数据包结构中的关键部分，用于标识数据包的类型和用途，确保通信双方正确解析数据。不同的 PID 标识了不同类型的USB包。由**四位标识符 + 四位标识符反码**构成。这里只用（PID0~4）,PID4~7是PID0~4的取反，用来校验 （偶检验）PID。
 
-![img](..\figure\0fc72bcfab3e315fdc7eb07f5e3f2681.png)
+![img](../figure/0fc72bcfab3e315fdc7eb07f5e3f2681.png)
 
 #### 2.包分类
 
@@ -219,7 +219,7 @@ USB包由五部分组成，即**同步字段（SYNC**）、**包标识符字段�
 
 ### 4.包的地址域
 
-地址域有两部分组成：【 7bits 的设备地址 ADDR + 4 bits 的端点地址 ENDP】![img](..\figure\bc5750be5303fa093711292c2a491d9f.png)可以知道，USB 系统最大支持链接 127 个设备，每个设备最多 2^4=16 个端点。这个 ENDP 只用在 IN/OUT/SETUP令牌包中。
+地址域有两部分组成：【 7bits 的设备地址 ADDR + 4 bits 的端点地址 ENDP】![img](../figure/bc5750be5303fa093711292c2a491d9f.png)可以知道，USB 系统最大支持链接 127 个设备，每个设备最多 2^4=16 个端点。这个 ENDP 只用在 IN/OUT/SETUP令牌包中。
 
 ### 5.包的帧号域
 
@@ -301,46 +301,46 @@ USB 事务分为3类：
 
 - 【正常】的设置事务处理
 
-  ![img](..\figure\57e69c35e0c1112dd26d0c1ac911a28a.png)
+  ![img](../figure/57e69c35e0c1112dd26d0c1ac911a28a.png)
 
 - 【设备忙时】的设置事务处理
 
-  ![img](..\figure\d2110c357ef999edd3e3e351152985cc.png)
+  ![img](../figure/d2110c357ef999edd3e3e351152985cc.png)
 
 - 【设备出错】的设置事务处理
-                                               ![img](..\figure\5026ced98eebd4365ac856b5524eac7f.png)
+                                               ![img](../figure/5026ced98eebd4365ac856b5524eac7f.png)
 
 ## 3.IN 事务
 
 - 【正常】的输入事务处理
 
-  ![img](..\figure\22b7ab96cee4a2e348a78920564d81d6.png)
+  ![img](../figure/22b7ab96cee4a2e348a78920564d81d6.png)
 
 - 【设备忙】时的输入事务处理  
 
-  ![img](..\figure\ff245ba55a46cad6645caee373dccb88.png)
+  ![img](../figure/ff245ba55a46cad6645caee373dccb88.png)
 
 - 【设备出错】时的输入事务处理
-                                                     ![img](..\figure\c92e1b241c5583072725862c097c195f.png)
+                                                     ![img](../figure/c92e1b241c5583072725862c097c195f.png)
 
 
 ## 4.OUT 事务
 
 - 【正常】的输出事务处理
-                                                        ![img](..\figure\b9567f1381d55981c8e249c8dc35d9ad.png)
+                                                        ![img](../figure/b9567f1381d55981c8e249c8dc35d9ad.png)
 
 - 【设备忙时】的输出事务处理
 
-  ![img](..\figure\43dda4ae360f4b8b5f5a5a177127b76c.png)
+  ![img](../figure/43dda4ae360f4b8b5f5a5a177127b76c.png)
 
 - 【设备出错】的输出事务处理
-                                                        ![img](..\figure\a508ef4e448e33329505355c57021351.png)
+                                                        ![img](../figure/a508ef4e448e33329505355c57021351.png)
 
 # USB传输
 
 ## 1.四大传输对比
 
-![usb-transfer-compare](..\figure\35nqepwpawl.png)
+![usb-transfer-compare](../figure/35nqepwpawl.png)
 
 ## 2.控制传输
 
@@ -361,7 +361,7 @@ steup 21 22 3 2 0
 steup 21 22 0 2 0
 ```
 
- ![img](..\figure\6bc954d7b59b8c47f892ca7f4fb3524a.png)
+ ![img](../figure/6bc954d7b59b8c47f892ca7f4fb3524a.png)
 
 # USB请求
 
@@ -370,7 +370,7 @@ steup 21 22 0 2 0
 标准的USB设备请求命令是用在控制传输中的“初始设置步骤”里的数据包阶段(即DATA0，由8个字节构成)。也就是说，是控制传输的建立阶段（SetUP）的 DATA0 的 8 个字节。大小都是8个字节，具有相同的结构，由5个字段构成(字段是请求命令的数据部分)，结构如下(括号中的数字表示字节数，首字母bm,b,w分别表示位图、字节，双字节)：
 **bmRequestType(1) + bRequest(1) + wvalue(2) + wIndex(2) + wLength(2)**
 
-![img](..\figure\ff319d8a064dd78504f7b61c432656cc.png)
+![img](../figure/ff319d8a064dd78504f7b61c432656cc.png)
 
 在 USB 协议中，`bmRequestType` 是 USB 控制传输中**Setup 数据包**的第一个字节，用于定义请求的方向、类型和接收方。它的 8 位二进制结构如下：
 
@@ -485,7 +485,7 @@ bLength(1) + bDecriptorType(1)
 //此描述表的字节数 + 描述符的类型
 ```
 
-bDecriptorType的取值如下：   ![image-20250918090217734](..\figure\image-20250918090217734.png)
+bDecriptorType的取值如下：   ![image-20250918090217734](../figure/image-20250918090217734.png)
 
 
 
@@ -506,7 +506,7 @@ wValue = (0x03< 8) | 0x00 // ((GET_DESCRIPTOR_STR < 8) | 0x00 )
 //根据us2.0协议9.4.3节描述，获取描述符时`bmRequestType=0x80，bRequest=0x06,`这个是协议规定固定的。`wvalue=0x0100`，高字节表示描述符类型，01表示设备，02表示配置；低字节表示索引。
 ```
 
-返回的结构如下：该字符串描述符包含双字节的语言*ID*的数组，*wLANGID[0]~wLANGID[x]*指明了设备支持的语言。![image-20250807154208918](..\figure\image-20250807154208918.png)
+返回的结构如下：该字符串描述符包含双字节的语言*ID*的数组，*wLANGID[0]~wLANGID[x]*指明了设备支持的语言。![image-20250807154208918](../figure/image-20250807154208918.png)
 ```c
 BYTE usbzhLangageId[4] = 
 {
@@ -548,7 +548,7 @@ wIndex = 0x0409 (English)
 >
 > *bString* 域为设备实际返回的以UNICODE编码的字符串流，我们在编写设备端硬件驱动的时候需要将字符串转换为UNICODE编码，也可以通过一些UNICODE转换工具进行转换。
 
-![image-20250807155623595](D:\MyNote\-\嵌入式开发笔记\figure\image-20250807155623595.png)
+![image-20250807155623595](../figure/image-20250807155623595.png)
 
 ------
 
