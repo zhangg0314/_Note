@@ -1,0 +1,3 @@
+## 4. WSL 安装参考
+
+[Windows 11 下安装 WSL 和 Ubuntu 24.04 全记录](https://dangzitou.github.io/posts/windows11-install-wsl-ubuntu-24-04/)
