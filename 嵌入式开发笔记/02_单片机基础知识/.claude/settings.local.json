@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(claude plugin *)",
+      "Bash(git mv *)",
+      "Bash(mv \"15_数字滤波.md\" \"10_数字滤波.md\")",
+      "Bash(mv \"10_单片机链接脚本.md\" \"09_单片机链接脚本.md\")",
+      "Bash(mv \"09_串口通信（高级篇）.md\" \"08_Linux串口工具.md\")",
+      "Bash(mv \"08_IAP固件升级.md\" \"07_IAP固件升级.md\")",
+      "Bash(mv \"07_单片机通信（AT指令）.md\" \"06_单片机通信（AT指令）.md\")"
+    ]
+  }
+}
