@@ -10,7 +10,7 @@ touch <FILENAME>           #创建/打开文件并将文件最新修改时间更
 touch File{1..5}.txt       #结合通配符，创建多个指定名称的空文件
 ```
 
-### 2.查找文件
+## 2.查找文件
 
 ```bash
 find 路径 条件 文件名
@@ -29,7 +29,7 @@ find . -type f \( -user username -o -size +1M \)
 find / -name "*.mp4" -exec rm -rf {} \;
 ```
 
-### 3.目录管理
+## 3.目录管理
 
 ```bash
 pwd		#显示当前工作区所在路径的绝对路径
@@ -51,7 +51,7 @@ rmdir <DIRECTORYNAME>     	   #删除空目录
 	[option]    -p             #递归删除文件夹，先删子目录，之后若父目录也空则也删除，故p后面的路径要包含父目录名和子目录名  
 ```
 
-### 4.查看文件类型
+## 4.查看文件类型
 
 ```bash
 file [option] 文件名
@@ -447,6 +447,25 @@ sudo apt-cache depends 包名  #查看包的依赖关系
 #apt-get在安装过程中提示用户确认是否继续操作，而 Docker 构建过程是自动化的，无法手动输入确认。解决方法在 Docker 构建过程中，需要确保命令能够自动运行，而不会提示用户输入。可以通过以下方法解决：方法1：使用   -y   选项自动确认在   apt-get install   命令中添加   -y   选项，这样可以自动确认安装操作，无需手动输入。
 
 RUN apt-get update && apt-get install -y iputils-ping iproute2 net-tools
+
+
+# 删包 + 配置文件 + 不再需要的依赖
+  sudo apt-get purge --autoremove <包名>
+
+  purge = 删包 + 删配置文件（比 remove 干净）
+  --autoremove = 顺带删掉没用的依赖
+
+  如果想彻底扫干净残留：
+
+  sudo apt-get purge --autoremove <包名>
+
+  # 清缓存
+  sudo apt-get clean
+
+  # 查有没有漏的文件
+  locate <包名>
+  dpkg -L <包名> 2>/dev/null | xargs ls -la 2>/dev/null
+
 ```
 
 ### 		3.离线软件包管理
