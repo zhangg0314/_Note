@@ -510,18 +510,14 @@ echo $PATH                     #检查环境变量
 
 ## 1.远程调试原理
 
-在 GDB 远程调试的整个流程中，**只有 ARM 开发板上的`app`程序在真正运行**，宿主机（服务器）上的`app`仅作为 “符号表载体”，全程不会被执行，以下是精准拆解：
-
-### 1.核心运行逻辑
-
-“运行体” 与 “解析体” 分离。
+在 GDB 远程调试的整个流程中，只有 ARM 开发板上的`app`程序在真正运行，宿主机（服务器）上的`app`仅作为 “符号表载体”，不会被执行。
 
 |  位置  |        文件角色        | 是否运行 | 核心作用                                                     |
 | :----: | :--------------------: | :------: | ------------------------------------------------------------ |
-| 开发板 | `/home/root/test/app`  |   ✅ 是   | 被 gdbserver 加载到板端内存，真正执行指令、占用 CPU / 内存，响应调试指令（断点、单步）； |
-| 宿主机 | `/opt/arm_project/app` |   ❌ 否   | 仅被交叉 GDB 读取**调试符号表**（行号、函数名、变量地址映射），不加载、不执行； |
+| 开发板 | `/home/root/test/app`  |    是    | 被 gdbserver 加载到板端内存，真正执行指令、占用 CPU / 内存，响应调试指令； |
+| 宿主机 | `/opt/arm_project/app` |    否    | 仅被交叉 GDB 读取调试符号表（行号、函数名、变量地址映射），不加载执行； |
 
-### 2.可视化运行流程
+## 2.可视化运行流程
 
 ```plaintext
 宿主机                          网络                          开发板
@@ -533,8 +529,6 @@ echo $PATH                     #检查环境变量
      │ （如：b main → 转换为0x12345678断点）    │ （如：暂停在0x12345678，回传a=10）
      └──────────────────────────────────────────┘
 ```
-
-### 3.关键佐证
 
 1. **进程仅出现在开发板**
 
@@ -549,13 +543,9 @@ echo $PATH                     #检查环境变量
 
    若调试中`app`触发段错误，崩溃的是开发板上的`app`进程，宿主机 GDB 仅收到 “程序崩溃” 的通知，自身不会受影响。
 
-### 4.常见误区纠正
+宿主机 GDB 的`r`（run）指令，本质是下发 “启动板端 app” 的指令给 gdbserver，而非在主机运行 app—— 因为宿主机是 x86 架构，ARM 架构的`app`根本无法在主机运行。
 
-❌ 误区：“宿主机 GDB 启动`./app`后，程序会在主机运行，再同步到板端”
-
-✅ 正解：宿主机 GDB 的`r`（run）指令，本质是**下发 “启动板端 app” 的指令给 gdbserver**，而非在主机运行 app—— 因为宿主机是 x86 架构，ARM 架构的`app`根本无法在主机运行（指令集不兼容）。
-
-## 2.安装gdbserver
+## 3.安装gdbserver
 
 ###  1.生成Makefile
 
@@ -579,95 +569,54 @@ make
 ### 3.拷贝到目标平台
 
 ```bash
-1.拷贝之前先更改gdbserver读写权限：chmod 777 gdbserver 
-2.将可执行文件gdbserver拷贝到目标平台的/usr/local/bin/目录下。至此，远程调试环境已经搭建完成。
+#1.拷贝之前先更改gdbserver读写权限：chmod 777 gdbserver 
+#2.将可执行文件gdbserver拷贝到目标平台的/usr/local/bin/目录下。至此，远程调试环境已经搭建完成。
 ```
 
-## 3.调试流程
+## 4.调试步骤
 
-### 1.检查网络是否正常
+1. 检查网络是否正常
 
-登入虚拟机和开发板的Linux系统，执行如下操作：
+2. 编辑和编译测试代码
 
-1. 开发板ping主机
+3. 编译代码
 
-2. 开发板ping虚拟机
+   ```bash
+   -g #设置带调试信息的程序      
+   ```
+4. 设置读写权限
 
-3. 主机ping开发板
-
-4. 虚拟机ping开发板
-
-5. 保证相互之间均可以ping通。
-
-6. 注意：主机ip、开发板ip和虚拟机ip地址设置在同一个网段内。
-
-### 2.编辑和编译测试代码
-
-#### 1.测试代码
-
-```c++
-#include <iostream>
-#include <string>
-using namespace std;
-void fun(int &a, int &b)
-{
-     a = b = 10;
-}
-void my_fun(int &a, int &b)
-{
-    a > b ? (a += b) : (b -= a);
-    fun(a, b);
- }
-int main()
-{
-    int a = 13， b = 16;
-    my_fun(a,b);
-    cout<< "a = " << a << endl;
-    cout<< "b = " << b << endl;
-    return(0);
-}                        
-```
-
-#### 2.编译代码
-
-```bash
--g #设置带调试信息的程序
-```
-
-#### 3.设置读写权限
-
-```bash
-#修改可执行二进制文件test读写权限
-chmod 777 test
-```
-
-#### 4.下载文件到开发板
-
-下载可执行二进制文件到开发板的工作目录下。文件下载方法：在Linux系统编译好的可执行文件先下载到window，然后再从window下载到开发板。（下载操作方式众多，选择自己习惯的就行）
+   ```shell
+   #修改可执行二进制文件test读写权限
+   chmod 777 test
+   ```
+5. 下载文件到开发板
+   下载可执行二进制文件到开发板的工作目录下。
 
 ### 3.启动调试环境
 
 ```bash
 宿主机IP：192.168.xxx.xxx
-开发板IP：192.168.xxx.xxx
+集中器IP：192.168.65.160
 ```
 
 1. 开发板上运行gdbserver
 
    ```bash
-   gdbserver 192.168.xxx.xxx:2001 test
+   gdbserver target remote 192.168.65.160:1234 ./dlmsd_
    ```
 
-2. 宿主机上运行arm-linux-gdb
+2. 服务器上运行arm-linux-gdb
 
-   ```bash
-   arm-linux-gdb test
+   ```shell
+   zhangg@ubuntu1404:~/menggu/Debug/sg698/debian/terminaloop/home/app$
+   /opt/ext-toolchain/bin/arm-linux-gnueabihf-gdb dlmsd
    ```
 
 3. 连接gdbserver
 
    ```bash
-   (gdb) target remote 192.168.xxx.xxx:2001
+   (gdb) target remote 192.168.65.160:1234
    ```
 
 ### 4..gdbinit脚本
