@@ -201,7 +201,6 @@ sshpass -p zg2025 ssh zhangg@10.0.3.100 "ls /home/zhangg"
 ### 2. `SSHFS `免密挂载
 
 ```bash
-# 完整命令（你的场景）
 sshfs \
   -o ssh_command='sshpass -p tc2016tc ssh -o StrictHostKeyChecking=no' \
  	zhangg@10.0.3.100:/home/zhangg/ModularizationTerminal/build/allwinner/Debug/bin \
@@ -233,7 +232,7 @@ sshpass -f /root/ssh_pass.txt ssh zhangg@10.0.3.100
 sshfs -o ssh_command='sshpass -f /root/ssh_pass.txt ssh -o StrictHostKeyChecking=no' ...
 ```
 
-## 7.关键参数与避坑
+## 7.关键参数
 
 ### 1. 核心参数
 
@@ -243,7 +242,7 @@ sshfs -o ssh_command='sshpass -f /root/ssh_pass.txt ssh -o StrictHostKeyChecking
 | `-f <文件>` |     从文件读取密码（更安全）     |    `sshpass -f /root/ssh_pass.txt ssh ...`    |
 |    `-e`     |  从环境变量 `SSHPASS` 读取密码   | `export SSHPASS=zg2025 && sshpass -e ssh ...` |
 
-### 2. 高频踩坑点
+### 2. 踩坑点
 
 |                          问题现象                           |                       根因 & 解决方案                        |
 | :---------------------------------------------------------: | :----------------------------------------------------------: |
