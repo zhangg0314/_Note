@@ -1,8 +1,14 @@
 # GDBM介绍
 
-GDBM（GNU database manager）是一套简单的资料管理程序。一般的linux发行版中都会自带了一个符合X/Open技术规范的DBM数据库，这个数据库适合存储相对比较静态的索引化数据。有些人认为DBM根本算不上是个数据库，顶多算是个索引化的文件存储系统，事实也确实如此，因此操作GDBM就跟操作文件很相似。
+​	GDBM（GNU database manager）是一套简单的资料管理程序。一般的linux发行版中都会自带了一个符合X/Open技术规范的DBM数据库，这个数据库适合存储相对比较静态的索引化数据。
 
-GDBM是由GNU实现的DBM数据库，其特点是简单、小巧、可靠、高性能,并且已经被移植到了windows平台。GDBM数据库包含若干条记录，每一个记录由关键字和数据记录（KEY/VALUE）构成。保存在GDBM数据库中的每一个记录都必须有一个独一无二的关键字，数据可以是简单的数据类型，也可以是复杂的数据类型，例如C语言中的结构。技术规范里允许具体实现时把关键字和数据的最大长度限制在1024个字节，但这个限制通常没有什么意义，因为具体实现出来的东西往往比规范更灵活。
+​	有些人认为DBM根本算不上是个数据库，顶多算是个索引化的文件存储系统，事实也确实如此，因此操作GDBM就跟操作文件很相似。
+
+​	GDBM是由GNU实现的DBM数据库，其特点是简单、小巧、可靠、高性能,并且已经被移植到了windows平台。GDBM数据库包含若干条记录，每一个记录由关键字和数据记录（KEY/VALUE）构成。
+
+​	保存在GDBM数据库中的每一个记录都必须有一个独一无二的关键字，数据可以是简单的数据类型，也可以是复杂的数据类型，例如C语言中的结构。
+
+​	技术规范里允许具体实现时把关键字和数据的最大长度限制在1024个字节，但这个限制通常没有什么意义，因为具体实现出来的东西往往比规范更灵活。
 
 # GDBM特点
 
@@ -102,7 +108,9 @@ gdbm_close(dbf);
 
 ### 1.函数介绍
 
-GDBM数据库的存储方式是一个关键字对应一条数据记录，关键字类似于数据库中的主键，然而关键字并不一定为数据记录中的字段。GDBM数据库中定义了datum类型，无论是关键字还是数据记录都是以datum类型存储在数据库中的。GDBM不会创建两个一样的关键字；在gdbm_store（）函数中选用GDBM_INSERT参数，如果新数据记录的关键字已经存在，那么会返回1，但新的数据记录不会被插入到数据库中.gdbm_store（）函数成功插入数据会返回0，失败会返回-1.
+​	GDBM数据库的存储方式是一个关键字对应一条数据记录，关键字类似于数据库中的主键，然而关键字并不一定为数据记录中的字段。
+
+​	GDBM数据库中定义了datum类型，无论是关键字还是数据记录都是以datum类型存储在数据库中的。GDBM不会创建两个一样的关键字；在gdbm_store（）函数中选用GDBM_INSERT参数，如果新数据记录的关键字已经存在，那么会返回1，但新的数据记录不会被插入到数据库中.gdbm_store（）函数成功插入数据会返回0，失败会返回-1.
 
 ```c
 int gdbm_store (GDBM_FILE dbf,datum key,datum content,int flag) 
@@ -260,26 +268,26 @@ int gdbm_setopt (GDBM_FILE dbf,int option,int *value,int size)
 
 下面是错误代码，指出了出错类型，通过`gdbm_strerr（）`函数可以得到详细的出错信息。
 
-| 错误宏                      | 解释                    |
-| --------------------------- | ----------------------- |
-| GDBM_NO_ERROR               | No error                |
-| GDBM_MALLOC_ERROR           | Malloc error            |
-| GDBM_BLOCK_SIZE_ERROR       | Block size error        |
-| GDBM_FILE_OPEN_ERROR        | File open error         |
-| GDBM_FILE_WRITE_ERROR       | File write error        |
-| GDBM_FILE_SEEK_ERROR        | File seek error         |
-| GDBM_FILE_READ_ERROR        | File read error         |
-| GDBM_BAD_MAGIC_NUMBER       | Bad magic number        |
-| GDBM_EMPTY_DATABASE         | Empty database          |
-| GDBM_CANT_BE_READER         | Can't be reader         |
-| GDBM_CANT_BE_WRITER         | Can't be writer         |
-| GDBM_READER_CANT_DELETE     | Reader can't delete     |
-| GDBM_READER_CANT_STORE      | Reader can't store      |
+|           错误宏            |          解释           |
+| :-------------------------: | :---------------------: |
+|        GDBM_NO_ERROR        |        No error         |
+|      GDBM_MALLOC_ERROR      |      Malloc error       |
+|    GDBM_BLOCK_SIZE_ERROR    |    Block size error     |
+|    GDBM_FILE_OPEN_ERROR     |     File open error     |
+|    GDBM_FILE_WRITE_ERROR    |    File write error     |
+|    GDBM_FILE_SEEK_ERROR     |     File seek error     |
+|    GDBM_FILE_READ_ERROR     |     File read error     |
+|    GDBM_BAD_MAGIC_NUMBER    |    Bad magic number     |
+|     GDBM_EMPTY_DATABASE     |     Empty database      |
+|     GDBM_CANT_BE_READER     |     Can't be reader     |
+|     GDBM_CANT_BE_WRITER     |     Can't be writer     |
+|   GDBM_READER_CANT_DELETE   |   Reader can't delete   |
+|   GDBM_READER_CANT_STORE    |   Reader can't store    |
 | GDBM_READER_CANT_REORGANIZE | Reader can't reorganize |
-| GDBM_UNKNOWN_UPDATE         | Unknown update          |
-| GDBM_ITEM_NOT_FOUND         | Item not found          |
-| GDBM_REORGANIZE_FAILED      | Reorganize failed       |
-| GDBM_CANNOT_REPLACE         | Cannot replace          |
-| GDBM_ILLEGAL_DATA           | Illegal data            |
-| GDBM_OPT_ALREADY_SET        | Option already set      |
-| GDBM_OPT_ILLEGAL            | Illegal option          |
+|     GDBM_UNKNOWN_UPDATE     |     Unknown update      |
+|     GDBM_ITEM_NOT_FOUND     |     Item not found      |
+|   GDBM_REORGANIZE_FAILED    |    Reorganize failed    |
+|     GDBM_CANNOT_REPLACE     |     Cannot replace      |
+|      GDBM_ILLEGAL_DATA      |      Illegal data       |
+|    GDBM_OPT_ALREADY_SET     |   Option already set    |
+|      GDBM_OPT_ILLEGAL       |     Illegal option      |

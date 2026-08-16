@@ -139,3 +139,44 @@ sqlite> PRAGMA journal_mode = WAL;
      shared_ptr<MeterDataDB>（使用 SQLiteCpp WAL 模式），连接一直保持不关闭
      - ResetApp() 用 killall -9 杀进程，但 dlmsd、dlmsgather、gatherexe 被排除（未被杀）
      - 结果：文件被删除后，旧连接仍指向已删除的 inode；新连接（重新打开的）看到新 inode → 数据分裂/不一致
+
+# 数据库优化
+
+没有外层 beginTransaction()/commitTransaction()，每个 SQL 语句会隐式自动提交（autocommit 模式）。insertNoTrans() 里的 REPLACE
+  INTO 和 DELETE 各自独立 fsync——跟原来带 SQLite::Transaction 的效果一样，甚至更差（原来至少 REPLACE+DELETE 在同一事务里
+
+ dlmspub.cpp WriteToDB ARRAY 分支
+
+  db->beginTransaction();
+    for each row: db->insertNoTrans()     // ← 无 inner transaction
+    for each missing: db->insertNoTrans() // ← 无 inner transaction
+  db->commitTransaction();
+
+  N 次独立事务 + N 次 fsync → 1 次事务 + 1 次 fsync。编译部署后看 [WDB_DIAG] 的 data_ms 应该从几千降到几十。
+
+
+
+❯ terminate called after throwing an instance of 'terminate called after throwing an instance of 'SQLite::Exception'
+  terminate called after throwing an instance of 'SQLite::Exception'
+    what():  cannot start a transaction within a transactionSQLite::Exception'
+    what():  cannot start a transaction within a transaction
+
+  Aborted (core dumped)
+
+
+  Thought for 15s (ctrl+o to expand)
+
+● 多线程冲突。线程 A 持有外层事务时，线程 B 调了 insert()（内部创建 Transaction）→ SQLite 拒绝嵌套 BEGIN。
+
+  修复：insert() 里检测是否已在事务中，是则跳过 SQLite::Transaction。
+
+  Thought for 3s, searched for 1 pattern, listed 1 directory (ctrl+o to expand)
+
+❯ insert() 里检测是否已在事务中，是则跳过 SQLite::Transaction,跳过会干嘛，就漏数据了》
+
+  Thought for 11s, searched for 1 pattern (ctrl+o to expand)
+
+● 不会漏。sqlite3_get_autocommit() 返回 0 表示已在事务中，此时跳过 inner Transaction——外层 commitTransaction() 会统一提交。返回 1
+  表示不在事务中，照常创建 Transaction——原有的独立 insert 行为不变。
+
+  让我找 SQLiteCpp 的 getHandle()：

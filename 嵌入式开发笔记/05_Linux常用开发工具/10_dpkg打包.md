@@ -1,8 +1,8 @@
-# 概念介绍
+# 基本概念
 
-​	`dpkg-buildpackage` 是 `Debian/Ubuntu` 系统中用于构建软件包的核心工具，它会调用一系列底层工具（如 `dpkg-deb`、`dpkg-gencontrol`）来自动生成 `.deb` 软件包。
+- `dpkg-buildpackage` 是 `Debian/Ubuntu` 系统中用于构建软件包的核心工具，它会调用一系列底层工具（如 `dpkg-deb`、`dpkg-gencontrol`）来自动生成 `.deb` 软件包。
+- `.deb`软件包相当于 Windows 中的 **`.msi` 或 `.exe` 安装文件**。
 
-​	`.deb`软件包相当于 Windows 中的 **`.msi` 或 `.exe` 安装文件**。
 
 开发者只需要运行 `dpkg-buildpackage` 这一个命令，就能自动完成从 “源代码” 到 “可安装`.deb`包” 的全流程，其执行流程大致如下：
 
