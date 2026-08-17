@@ -69,7 +69,8 @@ git config --global user.email "xxx@163.com"
 #查看配置信息
 
 git config --list
-
+#正常显示中文文件名
+git config --global core.quotepath false
 #修改配置信息
 git config --global --replace-all user.name "username2"
 git config --global --replace-all user.email "xxx@qq.com"
