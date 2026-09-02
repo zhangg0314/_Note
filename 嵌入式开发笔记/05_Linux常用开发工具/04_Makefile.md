@@ -296,27 +296,107 @@ lowlevel_init.o : lowlevel_init.S
 
 # 	常用标准函数
 
-## 1.格式
+## 1.标准格式
 
 ```makefile
 $(<函数名> <参数1,参数2>)
 ${<函数名> <参数1,参数2>}
 ```
 
-## 2.举例
+## 2.字符串与路径解析
 
-一个文件名正常应该是带绝对路径的文件名，缺省绝对路径只有文件名的化默认都是当前目录下的文件。
+一个文件名正常应该是带绝对路径的文件名，缺省绝对路径只有文件名的化默认都是当前目录下的文件。当文件名（无论有路径）赋值给变量时，其特性就不是文件了，就是一个字符串，赋值的时候缺省路径那么该字符串就没有路径，变量就是变量，别指望变量会记住"这是个文件、它在哪个目录"，**规则里的是文件，变量里的是字符串；裸文件名 = 默认当前目录，这个默认值在赋值时不会自动补进字符串里**
 
-当文件名（无论有路径）赋值给变量时，其特性就不是文件了，就是一个字符串，赋值的时候缺省路径那么该字符串就没有路径，变量就是变量，别指望变量会记住"这是个文件、它在哪个目录"，**规则里的是文件，变量里的是字符串；裸文件名 = 默认当前目录，这个默认值在赋值时不会自动补进字符串里**
+### 1.核心语义
+
+GNU Make 的一条核心语义：**Makefile 里的"文件名"只是字符串，路径解析发生在"使用"时而不是"赋值"时。**
+
+|        时机        |                          发生了什么                          |
+| :----------------: | :----------------------------------------------------------: |
+|       赋值时       |                  纯字符串操作，不碰文件系统                  |
+|  作为依赖/目标时   | make 才去文件系统找文件，相对路径按工作目录（或 `VPATH`/`vpath`）解析 |
+| 在 recipe 命令行里 |       传给 shell 执行，由 shell 按当前目录解析相对路径       |
+
+```makefile
+SRCS = main.c          # 只是字符串 "main.c"
+main: $(SRCS)
+	gcc $(SRCS) -o main   # 这里才真的在当前目录找 main.c
+```
+
+### 2.实际指导意义
+
+1. **路径安全**
+   想让路径可靠，显式加工：`$(CURDIR)/...`、`$(abspath ...)`、`$(realpath ...)`，或写成 `src/main.c` 这类相对路径，而不是裸文件名。
+2. **不要假设**
+   `OBJS = main.o foo.o` 只是名字，最终在哪生成/查找取决于规则目标和 make 的运行目录。
+3. **一句话总结**：**规则里的是文件，变量里的是字符串；裸文件名 = 默认当前目录，这个默认值在赋值时不会自动补进字符串里。**
+
+---
+
+## 3.常用函数大全
+
+### 1.字符串处理类
+
+|           函数            |                  作用                  |                     示例                     |
+| :-----------------------: | :------------------------------------: | :------------------------------------------: |
+|  `$(subst from,to,text)`  |   把 text 中所有 `from` 替换为 `to`    |      `$(subst .c,.o,main.c)` → `main.o`      |
+|  `$(patsubst p,r,text)`   |         按模式替换（`%` 通配）         |   `$(patsubst %.c,%.o,main.c)` → `main.o`    |
+|      `$(strip str)`       |        去首尾空白并压缩连续空格        |        `$(strip "  a   b ")` → `a b`         |
+|  `$(findstring find,in)`  | 在 in 里找 find，找到返回 find，否则空 |         `$(findstring a,abc)` → `a`          |
+|   `$(filter p...,text)`   |           保留匹配模式的单词           |   `$(filter %.c,main.c main.o)` → `main.c`   |
+| `$(filter-out p...,text)` |           去掉匹配模式的单词           | `$(filter-out %.o,main.c main.o)` → `main.c` |
+|      `$(sort list)`       |           按字典序排序并去重           |         `$(sort b a c a)` → `a b c`          |
+|     `$(word n,text)`      |       取第 n 个单词（从 1 开始）       |           `$(word 2,a b c)` → `b`            |
+|  `$(wordlist s,e,text)`   |          取第 s 到第 e 个单词          |      `$(wordlist 2,3,a b c d)` → `b c`       |
+|      `$(words text)`      |              统计单词个数              |            `$(words a b c)` → `3`            |
+|    `$(firstword text)`    |              取第一个单词              |          `$(firstword a b c)` → `a`          |
+|    `$(lastword text)`     |             取最后一个单词             |          `$(lastword a b c)` → `c`           |
+
+**快捷写法**：`$(var:%.c=%.o)` ≡ `$(patsubst %.c,%.o,$(var))`；`$(var:.c=.o)` ≡ `$(subst .c,.o,$(var))`。最常用：
+
+```makefile
+OBJS = $(SRCS:.c=.o)        # 或 $(SRCS:%.c=%.o)
+```
+
+### 2.文件名处理类
+
+|           函数            |                  作用                  |                      示例                       |
+| :-----------------------: | :------------------------------------: | :---------------------------------------------: |
+|     `$(dir names...)`     |        取目录部分（含末尾 `/`）        |          `$(dir src/main.c)` → `src/`           |
+|   `$(notdir names...)`    |              取文件名部分              |        `$(notdir src/main.c)` → `main.c`        |
+|   `$(suffix names...)`    |                 取后缀                 |            `$(suffix main.c)` → `.c`            |
+|  `$(basename names...)`   |                去掉后缀                |          `$(basename main.c)` → `main`          |
+| `$(addprefix p,names...)` |                 加前缀                 | `$(addprefix obj/,a.o b.o)` → `obj/a.o obj/b.o` |
+| `$(addsuffix s,names...)` |                 加后缀                 |        `$(addsuffix .o,a b)` → `a.o b.o`        |
+|      `$(join l1,l2)`      |           两个列表按位置拼接           |           `$(join a b,1 2)` → `a1 b2`           |
+|   `$(wildcard pattern)`   |     展开通配符，返回真实存在的文件     |               见下方 U-Boot 示例                |
+|  `$(realpath names...)`   |  绝对路径（**要求文件存在**，否则空）  |            `$(realpath ./Makefile)`             |
+|   `$(abspath names...)`   | 绝对路径（**不要求存在**，只做规范化） |             `$(abspath ./nonexist)`             |
+
+```makefile
+# 判断配置文件是否存在
+ifneq ($(wildcard include/config/auto.conf),)
+    ...
+endif
+
+# 收集 .cmd 依赖文件：对每个 target 取目录 + 取文件名
+cmd_files := $(wildcard .*.cmd $(foreach f,$(targets),$(dir $(f)).$(notdir $(f)).cmd))
+
+# wildcard 与 if 配合：文件存在返回 y，否则 n
+HAVE_VENDOR_COMMON_LIB = $(if $(wildcard $(srctree)/board/$(VENDOR)/common/Makefile),y,n)
+```
+
+### 3.函数举例
 
 ```shell
 $(wildcard PATTERN)
 	#功能：列出当前目录下所有符合模式PATTERN格式的文件名,比如*.c列出当前目录下所有.c文件
 	#返回值：空格分割的，存在当前目录下的所有符合模式PATTERN格式的文件名,PATTERN是文件名，不是字串！！！	
 	#PATTERN：可以使用shell下的可识别的所有通配符
-作用：
-	SRC = add.c sub.c test.c xxx.c.....www.c#此时SRC仅仅只是一串字符，不会说有默认当前目录下的这些文件这种说法
-	取代：SRC = $(wildcard *.c),大大简洁了代码！！
+#作用：
+	SRC = add.c sub.c test.c xxx.c.....www.c
+	#此时SRC仅仅只是一串字符，不会说有默认当前目录下的这些文件这种说法
+	#取代：SRC = $(wildcard *.c),大大简洁了代码！！
 $(pastsubst <pattern>,<repalcement>,<text>)
 	#它用于将一个字符串中符合特定模式的子串替换为另一个字符串，不符合的字串就不换
 	#text:要进行替换的对象，若有多个则用空格隔开，text是字串
@@ -325,19 +405,131 @@ $(pastsubst <pattern>,<repalcement>,<text>)
 	#返回值是替换后的文件名，包含没有被替换的，比如，text为1.c，2.cpp，pattern为*.c，则返回值为1.o,2.cpp
 ```
 
-## 	6.makefile自定义函数 
+### 4.条件类函数
 
-​	**定义**：
+|           函数           |                        作用                        |
+| :----------------------: | :------------------------------------------------: |
+| `$(if cond,then[,else])` | cond 非空则展开 then，否则展开 else（else 可省略） |
+|     `$(or a,b,...)`      |              从左到右返回第一个非空值              |
+|     `$(and a,b,...)`     |          全部非空才返回最后一个值，否则空          |
 
-​			define 函数名 
+注意：这些是**函数**（表达式内求值），与 `ifeq`/`ifdef` 等**条件指令**（控制整个 Makefile 分支）不同。
 
-​				函数体		//用$(0….9)来获取第n个参数，第0个参数是函数名字
+```makefile
+HAVE_VENDOR_COMMON_LIB = $(if $(wildcard $(srctree)/board/$(VENDOR)/common/Makefile),y,n)
+CFLAGS = $(if $(DEBUG),-g,-O2)
+```
 
-​			endef
+### 5.循环函数
 
-​	**调用：**$(call 函数名 参数）
+`$(foreach var,list,text)` —— 把 list 里的每个单词依次赋给 `var`，展开 `text`，结果按空格拼接：
 
-## 	7.make命令的使用
+```makefile
+# U-Boot 中：遍历所有子目录，只保留带 Makefile 的目录
+clean-dirs := $(foreach f,$(u-boot-alldirs),$(if $(wildcard $(srctree)/$f/Makefile),$f))
+```
+
+注意：循环体里要修改别的变量需配合 `$(eval)` 才能持久生效。
+
+### 6.执行 shell 命令
+
+`$(shell command)` —— 执行 shell 命令并把**标准输出**作为结果（末尾换行被去掉）：
+
+```makefile
+ARCH := $(shell uname -m)
+DATE := $(shell date +%Y%m%d)
+SRCS := $(shell find src -name "*.c")
+```
+
+⚠️ 注意：
+
+1. 每次 `$(shell)` 都起一个子进程，**不能在 `$(foreach)` 大循环里滥用**。
+2. 命令输出为空时变量是空字符串，`ifdef` 判断会失效，常配合 `$(strip)` 或 `$(if)` 使用。
+
+### 7.控制类函数（调试/报错）
+
+|       函数        |              作用              |
+| :---------------: | :----------------------------: |
+|  `$(info text)`   | 打印信息，不报错，**总是求值** |
+| `$(warning text)` |    打印警告，make 继续执行     |
+|  `$(error text)`  |  打印错误并**立即终止** make   |
+
+```makefile
+ifeq ($(CONFIG_CPU),)
+$(error CONFIG_CPU is not set! Please configure first)
+endif
+```
+
+调试技巧：`$(info VAR=$(VAR))` 或 `$(warning ...)` 是排查变量展开问题最常用的手段。
+
+### 8.其他常用函数
+
+|             函数              |                             作用                             |                             说明                             |
+| :---------------------------: | :----------------------------------------------------------: | :----------------------------------------------------------: |
+| `$(call name,arg1,arg2,...)`  |                 调用自定义"函数"（带参变量）                 |   `define name` ... `endef`，内部用 `$(1)` `$(2)` 引用参数   |
+|        `$(eval text)`         |            把 text 当作 Makefile 内容动态展开解析            |                配合 `$(foreach)` 动态生成规则                |
+|        `$(value var)`         |                   取变量的**原始未展开**值                   |                        对递归变量有用                        |
+|        `$(origin var)`        | 返回变量来源（`command line`/`environment`/`file`/`undefined` 等） | U-Boot 用 `ifeq ("$(origin V)", "command line")` 判断 V 是否来自命令行 |
+|        `$(flavor var)`        |                 返回 `recursive` 或 `simple`                 |               判断变量是 `=` 还是 `:=` 定义的                |
+|  `$(file op filename,text)`   |            读写文件（`>` 写、`>>` 追加、`<` 读）             |                         较新版本才有                         |
+| `$(intcmp ...)`、`$(let ...)` |                    整数比较、局部变量绑定                    |                GNU make 4.4+ 才有，老环境慎用                |
+
+### 9.记忆要点
+
+1. **参数个数差异**
+   有的参数用逗号分隔多个（如 `subst from,to,text`），有的参数是单词列表（如 `$(sort ...)`），有的参数本身就是表达式（如 `$(if ...)` 里可以嵌套）。
+2. **参数判断**
+   参数之间用逗号隔开，如果有两个变量之间用空格隔开，他们属于一个参数列表也算一个参数
+3. **全部是"展开时求值"**
+   make 先展开所有函数，得到纯字符串，然后才用于规则/命令。
+4. **最常用的就这几个**
+   `wildcard`、`patsubst`（或 `:%.c=%.o` 简写）、`foreach`、`if`、`filter`、`notdir`、`dir`、`shell`、`error/warning/info`。写板级/驱动 Makefile 基本离不开 `obj-y += xxx.o` + 这些函数的组合。
+5. **查看完整手册**
+   `info make` 或 GNU Make Manual 的 **Functions** 章节。
+
+### 10.参数的一个重要澄清
+
+**`$(wildcard ...)` 的参数就是 `.*.cmd $(foreach ...)` 这一整串。** 
+
+make 函数参数只按逗号分隔，不按空格；`foreach`内部的逗号在嵌套括号里，不算`wildcard`的参数分隔符。展开后是一串空格分隔的词，`wildcard`把**每个词**当作一个 pattern 去匹配磁盘：
+
+|        输入词        |    类型    |         `wildcard`的行为         |
+| :------------------: | :--------: | :------------------------------: |
+|       `.*.cmd`       | 通配符模式 | 展开为所有匹配的文件（数量不定） |
+| `common/.main.o.cmd` | 具体文件名 |    存在 → 保留；不存在 → 丢掉    |
+
+展开顺序：由内向外 —— 先展开 `$(foreach)`/`$(dir)`/`$(notdir)`，`wildcard`最后拿到完全展开的字符串。
+
+### 11.流程图小结
+
+```makefile
+targets（目标名单）
+   │  $(sort) 排序去重
+   │  $(wildcard) 只留存在的目标
+   ▼
+foreach：每个目标 f ──► $(dir f) + "." + $(notdir f) + ".cmd"     （dir/.name.cmd）
+   │
+   ├─ 顶层再补上 .*.cmd 兜底（顶层 targets 为空）
+   ▼
+$(wildcard ...) 只保留磁盘上真实存在的 .cmd
+   ▼
+cmd_files ──► include ──► 加载上次命令 cmd_xxx 和依赖 deps_xxx ──► if_changed 判断增量
+```
+
+---
+
+## 	4.makefile自定义函数 
+
+```makefile
+#定义
+define 函数名 
+	函数体		#用$(0….9)来获取第n个参数，第0个参数是函数名字
+endef
+#调用：
+	$(call 函数名 参数）
+```
+
+## 	5.make命令的使用
 
 ```shell
 make #默认访问文件名为makefile的文件
@@ -357,7 +549,7 @@ make -w #当工程庞大分了好多文件目录时，打印当前的目录来�
 make -C #指定哪个目录下有makefile(默认加了-w的功能)，让make去执行它    
 ```
 
-##  	8.分目录管理源码
+##  	6.分目录管理源码
 
 ```makefile
 #*.c-->src目录
@@ -386,7 +578,7 @@ export 变量1，变量2，变量…..#将当前makefile的变量传递给其他
 如果把带有路径的文件名赋值给变量，当该变量在一个文件夹中定义赋值，而在另外一个文件夹中使用时应该用绝对路径。
 ```
 
-## 	9.makefile总结
+## 	7.makefile总结
 
 - **默认条件**
   假设目标名是test，如果当前目录中有test.c（一定要是.c文件才可），即存在以目标名为前缀，.c为后缀的C源文件，哪怕有test.c,test.txt并存，只要有test.c,则都算满足默认条件。
@@ -496,3 +688,7 @@ export 变量1，变量2，变量…..#将当前makefile的变量传递给其他
 makefile每条语句生成的目标都只是作为中间结果，和最终的一个目标，这些中间结果和最终目标文件会不会在当前目录下创建是要看以它们为目标的语句所用的shell命令是不是会去在当前目录下创建文件。不会在当前目录下创建目标文件的语句：叫做伪目标语句。
 
 # include命令
+
+```http
+https://www.cnblogs.com/cuckoos/articles/5049984.html
+```

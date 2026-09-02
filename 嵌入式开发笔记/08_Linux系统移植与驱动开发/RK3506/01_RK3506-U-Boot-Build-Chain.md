@@ -88,12 +88,12 @@ CONFIG_USB_GADGET_MANUFACTURER="Rockchip"  # string
 
 # 编译链路总览
 
-### 3.1 参与编译的目录分层
+## 1. 参与编译的目录分层
 
 按"通用 / 平台 / SoC / 板级"四层划分，门控机制为各目录 Makefile 中的 `obj-$(CONFIG_XXX) += foo.o`，由 `scripts/Makefile.build` 将满足条件的源文件编入 `built-in.o`。
 
 | 层次 | 目录/文件 | 门控 |
-|:-:|---|---|
+|:-:|:-:|:-:|
 | 通用基础 | `lib/` `common/` `cmd/` `env/` `fs/` `net/` `disk/` `drivers/` `test/`；`arch/arm/cpu/armv7/` `arch/arm/cpu/` `arch/arm/lib/`；`scripts/` `tools/` | 无条件 `obj-y` 或对应 CONFIG |
 | 瑞芯微平台 | `arch/arm/mach-rockchip/`（顶层文件，不含 rk3506/ 子目录）；`include/configs/rockchip-common.h`；`drivers/clk/rockchip/` `drivers/pinctrl/rockchip/` `drivers/ram/rockchip/` 等；`make.sh`、`scripts/fit.sh` | `CONFIG_ARCH_ROCKCHIP` |
 | RK3506 SoC | `arch/arm/mach-rockchip/rk3506/`（`rk3506.c`、`syscon_rk3506.c`）；`arch/arm/include/asm/arch-rockchip/cru_rk3506.h` `grf_rk3506.h` `ioc_rk3506.h`；`drivers/clk/rockchip/clk_rk3506.c`；`drivers/pinctrl/rockchip/pinctrl-rk3506.c`；`drivers/ram/rockchip/sdram_rk3506.c`；`drivers/misc/rk3506-secure-otp.S`；`arch/arm/dts/rk3506*.dts/i`；`include/configs/rk3506_common.h`；`configs/rk3506_defconfig` | `CONFIG_ROCKCHIP_RK3506` |
@@ -165,6 +165,64 @@ ld -r 合并 → $(obj)/built-in.o   环节 4  Makefile.build:353-358
 
 SPL/TPL 复用同一套机制：`scripts/Makefile.spl` 第 101 行同样将 `libs-y` 改写为 built-in.o，仅增加 `-DCONFIG_SPL_BUILD` 编译标志，使 `obj-spl-y` 与 `obj-$(CONFIG_SPL_*)` 生效。
 
+### 3.5 make all 到每个 .c 文件的传导链
+
+从目标到源文件是"目标链 + 递归 make + 模式规则"的三级传导。以 `drivers/clk/rockchip/clk_rk3506.c` 为例：
+
+**第一级 all 目标**（顶层 Makefile 第 875 行）：`all: $(ALL-y) cfg`。`ALL-y` 在 RK3506 下展开为 `spl/u-boot-spl.bin`（第 796 行）、`tpl/u-boot-tpl.bin`（第 802 行）、`u-boot`、`u-boot.dtb`（第 803 行）。
+
+**第二级 u-boot 目标 → 全部 built-in.o**（第 1290 行）：`u-boot: $(u-boot-init) $(u-boot-main) u-boot.lds FORCE`，其中 `u-boot-init = $(head-y)`、`u-boot-main = $(libs-y)`（第 725~728 行，libs-y 全部改写为 built-in.o）。
+
+**第三级 built-in.o → 目录递归**（第 1304、1312~1314 行）：
+
+```make
+$(sort $(u-boot-init) $(u-boot-main)): $(u-boot-dirs) ;
+
+$(u-boot-dirs): prepare scripts
+	$(Q)$(MAKE) $(build)=$@
+```
+
+`u-boot-dirs`（第 721 行）即 libs-y 去掉 built-in.o 后缀后的目录列表（lib、common、cmd、drivers、arch/arm/mach-rockchip、board/rockchip/evb_rk3506 等）。对每个目录开一个子进程 `make -f scripts/Makefile.build obj=<目录>`。
+
+**第四级 目录内**：子进程 `scripts/Makefile.build` 第 59 行 include 该目录自己的 Makefile，`obj-$(CONFIG_ROCKCHIP_RK3506) += clk_rk3506.o` 展开为 `obj-y`；第 109 行定义 `builtin-target`；第 358 行 `ld -r` 合成 built-in.o；make 继续处理前置 `clk_rk3506.o`，命中编译模式规则（第 279~281 行）：
+
+```make
+$(obj)/%.o: $(src)/%.c $(recordmcount_source) FORCE
+	$(call cmd,force_checksrc)
+	$(call if_changed_rule,cc_o_c)
+```
+
+实际 gcc 命令 `cmd_cc_o_c`（第 206 行）：
+
+```make
+cmd_cc_o_c = $(CC) $(c_flags) -c -o $@ $<
+```
+
+即 `arm-linux-gnueabihf-gcc $(c_flags) -c -o drivers/clk/rockchip/clk_rk3506.o drivers/clk/rockchip/clk_rk3506.c`。`c_flags`（顶层 Makefile 第 649~651 行）由 `KBUILD_CFLAGS`、`PLATFORM_CPPFLAGS`（含 `-march=armv7-a`、`-Iarch/arm/mach-rockchip/include` 等）、`UBOOTINCLUDE`（`-Iinclude -Iarch/arm/include ...`）与 `-include include/linux/kconfig.h` 组成。
+
+**第五级 递归向上合并**：`clk_rk3506.o` 合成 `drivers/clk/rockchip/built-in.o`，再逐级并入 `drivers/clk/built-in.o`、`drivers/built-in.o`，最终作为 `u-boot-main` 的一项进入 `u-boot` 链接。
+
+**SPL/TPL 走同一条链**：`scripts/Makefile.spl` 第 97~101 行给全部目录加 `spl/` 前缀（`libs-y := $(addprefix $(obj)/,$(libs-y))`），降目录时 `scripts/Makefile.build` 第 9~17 行的前缀剥离逻辑（`prefix` 逐级试 tpl/spl/.）把 `spl/` 剥掉，复用同一份目录 Makefile，仅带 `-DCONFIG_SPL_BUILD`（Makefile.spl 第 27 行）。
+
+```
+make all                                    Makefile:875
+  └─ u-boot                                 Makefile:1290
+      └─ drivers/built-in.o ...（libs-y）    Makefile:725
+          └─ 目录递归: make -f scripts/Makefile.build obj=drivers
+              └─ drivers/clk/built-in.o
+                  └─ obj=drivers/clk/rockchip
+                      ├─ include 目录 Makefile                     Makefile.build:59
+                      │    obj-$(CONFIG_ROCKCHIP_RK3506) += clk_rk3506.o
+                      ├─ built-in.o ← LD -r clk_rk3506.o           Makefile.build:358
+                      └─ clk_rk3506.o ← clk_rk3506.c               Makefile.build:279 / cmd_cc_o_c:206
+```
+
+**三个容易忽略的点**：
+
+1. **顺序保证**：`prepare`（第 1370 行）先产出 `include/config/auto.conf`、`version.h`、`timestamp.h`、`include/config.h`；`scripts`（第 497 行）先编出 fixdep；`tools`（第 1318 行 `$(filter-out tools, $(u-boot-dirs)): tools`）先编出 mkimage/fdtgrep——每个 .c 编译时依赖的配置与工具均已就绪。
+2. **并行**：`-j` 下 `u-boot-dirs` 各目录的递归 make 并发执行，目录内部多个 `.o` 也并行编译（模式规则天然支持）；依赖顺序由 make 的 DAG 保证（父目录 built-in.o 依赖子目录 built-in.o，`Makefile.build:345`）。
+3. **编哪些 .c 完全由 obj-y 决定**：`make all` 只认 built-in.o，built-in.o 只认 obj-y，只有 `$(obj)/%.o: $(src)/%.c` 这条模式规则把目标名映射到源文件。新增源文件只需在对应目录 Makefile 写一行 `obj-y += foo.o`，其余全部自动。
+
 ---
 
 # 配置阶段
@@ -202,7 +260,7 @@ make -f scripts/Makefile.build obj=scripts/kconfig rk3506_defconfig
 	$(Q)$< $(silent) --defconfig=arch/$(SRCARCH)/configs/$@ $(Kconfig)
 ```
 
-其中 `SRCARCH := ..`（第 15 行），实际命令为 `conf --defconfig=../configs/rk3506_defconfig Kconfig`。
+其中 `SRCARCH := ..`（第 15 行），`$(Q)$< $(silent) --defconfig=arch/../configs/$@ $(Kconfig)`实际命令为 `conf --defconfig=../configs/rk3506_defconfig Kconfig`。
 
 `conf` 为 `hostprogs-y`（第 204 行）成员，其构建由通用宿主规则完成：
 
@@ -215,12 +273,12 @@ make -f scripts/Makefile.build obj=scripts/kconfig rk3506_defconfig
 
 注：`scripts/kconfig/Makefile` 第 216 行 `always := dochecklxdialog` 使每次进入 scripts/kconfig 目录都会执行 ncurses 检查（`lxdialog/check-lxdialog.sh -check`），构建环境需具备 ncurses 开发库。
 
-**conf 的生成规则分布**
+## 3.conf 的生成规则分布
 
 `$(obj)/conf`（即 `scripts/kconfig/conf`）的生成规则分布在四个文件中：
 
 | 环节 | 位置 | 内容 |
-|---|---|---|
+|:-:|:-:|:-:|
 | 配料 | `scripts/kconfig/Makefile:196,204` | `conf-objs := conf.o zconf.tab.o`；`hostprogs-y := conf ...` |
 | 分类与前缀 | `scripts/Makefile.host:26,34-35,42,60-63` | conf 归入 `host-cmulti`；conf.o/zconf.tab.o 归入 `host-cobjs`；加 `$(obj)/` 前缀 |
 | 链接规则 | `scripts/Makefile.host:103-109` | `$(host-cmulti): FORCE`，命令 `HOSTLD` |
@@ -229,7 +287,35 @@ make -f scripts/Makefile.build obj=scripts/kconfig rk3506_defconfig
 | 原料生成 | `scripts/Makefile.lib:249-252` | `$(obj)/%: $(src)/%_shipped`，`cat` 复制出 zconf.tab.c 等 |
 | 触发 | `scripts/kconfig/Makefile:120-121` | `%_defconfig: $(obj)/conf` |
 
-展开后的实际规则（代入具体文件名）：
+**分类逻辑（host-cmulti 的计算变量名）**
+
+`scripts/Makefile.host` 第 34~35 行：
+
+```makefile
+host-cmulti := $(foreach m,$(__hostprogs),\
+	       $(if $($(m)-cxxobjs),,$(if $($(m)-objs),$(m))))
+```
+
+**逐段语义：**
+
+- `__hostprogs`（第 26 行）为 `$(sort $(hostprogs-y) $(hostprogs-m))`，本仓库展开为 `conf gconf kxgettext mconf nconf qconf`；
+- `$(foreach m, ...)` 遍历每个程序名并赋给临时变量 `m`；
+- `$($(m)-objs)` 为**计算变量名**：先展开 `$(m)` 再拼接变量名并取值，如 `m=conf` 时取变量 `conf-objs` 的值 `conf.o zconf.tab.o`；`$($(m)-cxxobjs)` 同理；
+- 外层 `$(if ...)`：存在 `-cxxobjs`（C++ 程序）时结果为**空**——C++ 程序归 `host-cxxmulti`（第 47 行），不进入 C 的 cmulti；
+- 内层 `$(if ...)`：存在 `-objs`（多 .o 组成）时返回 `$(m)`（选中）；否则为空——单文件程序归 `host-csingle`（第 30 行）。
+
+本仓库 6 个程序的分类结果：
+
+| 程序 | `-objs` | `-cxxobjs` | 判定过程 | 分类 |
+|:-:|:-:|:-:|:-:|:-:|
+| `conf` | `conf.o zconf.tab.o` | 无 | 外层假 → 内层真 | `host-cmulti` |
+| `mconf` | `mconf.o zconf.tab.o $(lxdialog)` | 无 | 同上 | `host-cmulti` |
+| `nconf` | `nconf.o zconf.tab.o nconf.gui.o` | 无 | 同上 | `host-cmulti` |
+| `kxgettext` | `kxgettext.o zconf.tab.o` | 无 | 同上 | `host-cmulti` |
+| `gconf` | `gconf.o zconf.tab.o` | 无 | 同上 | `host-cmulti` |
+| `qconf` | `zconf.tab.o` | `qconf.o`（第 200 行） | 外层真 → 空 | `host-cxxmulti`（C++） |
+
+分类结果为后续构建规则的选择器（`scripts/Makefile.host` 第 93~133 行）：`host-csingle` 单文件直编（第 98~99 行，HOSTCC），`host-cmulti` 链接多个 .o（第 107~109 行，HOSTLD + `multi_depend` 注入 .o 依赖），`host-cxxmulti` C++ 程序（第 125~127 行，HOSTCXX）。`conf` 正是通过这一行被归入 `host-cmulti`，从而匹配链接规则。展开后的实际规则（代入具体文件名）：
 
 ```makefile
 # 链接（显式规则，host-cmulti 展开 + multi_depend 注入依赖）
@@ -247,10 +333,10 @@ scripts/kconfig/zconf.tab.o: scripts/kconfig/zconf.lex.c scripts/kconfig/zconf.h
 
 规则链图：
 
-```
-%_defconfig: scripts/kconfig/conf                       kconfig/Makefile:120
+```makefile
+%_defconfig: scripts/kconfig/conf                       #kconfig/Makefile:120
   │
-  ▼ 显式规则（Makefile.host:107 + multi_depend）
+ # ▼ 显式规则（Makefile.host:107 + multi_depend）
 scripts/kconfig/conf: conf.o zconf.tab.o FORCE
   │  cmd: HOSTCC $(HOSTLDFLAGS) -o conf conf.o zconf.tab.o
   │
@@ -267,12 +353,12 @@ zconf.lex.c  ← zconf.lex.c_shipped
 zconf.hash.c ← zconf.hash.c_shipped
 ```
 
-## 3.conf 执行流程
+## 4.conf 执行流程
 
 `scripts/kconfig/conf.c` 的 `main()` 按序执行：
 
 | 步骤 | 代码位置 | 动作 |
-|---|---|---|
+|---|:-:|:-:|
 | 1 | `conf_parse(name)`（第 565 行） | 解析整棵 Kconfig 树：顶层 `Kconfig` → `arch/Kconfig` → `arch/arm/Kconfig` → `arch/arm/mach-rockchip/Kconfig` → `arch/arm/mach-rockchip/rk3506/Kconfig` → `board/rockchip/evb_rk3506/Kconfig` 及 `drivers/Kconfig`、`lib/Kconfig` 等 |
 | 2 | `conf_read(defconfig_file)`（第 584 行） | 读入 `configs/rk3506_defconfig`（171 行） |
 | 3 | `conf_set_all_new_symbols(def_default)`（第 665~666 行） | 未显式设置的符号按 `default` 补齐；处理 `select`/`imply`/`depends on`。例如 `ROCKCHIP_RK3506 select CPU_V7` 使 `.config` 出现 `CONFIG_CPU_V7=y`；`imply SPL/TPL` 使 `.config` 出现 `CONFIG_SPL=y`、`CONFIG_TPL=y`、`CONFIG_TPL_TINY_FRAMEWORK=y` |
@@ -290,20 +376,20 @@ zconf.hash.c ← zconf.hash.c_shipped
 
 ---
 
-## 5. 构建系统自举机制
+# 构建系统自举机制
 
 构建系统遵循"目标自备工具"原则：任何配置或编译目标所需的主机工具均作为该目标的依赖自动构建，无需预先手动编译。
 
-```
+```makefile
 make rk3506_defconfig
- ├─ scripts/basic/fixdep          自动构建（顶层 Makefile 的 scripts_basic）
- ├─ scripts/kconfig/conf          自动构建（%_defconfig 的前置依赖）
- └─ conf --defconfig=... Kconfig  生成 .config
+ ├─ scripts/basic/fixdep          #自动构建（顶层 Makefile 的 scripts_basic）
+ ├─ scripts/kconfig/conf          #自动构建（%_defconfig 的前置依赖）
+ └─ conf --defconfig=...          #Kconfig  生成 .config
 
 make all
- ├─ scripts/basic/fixdep          已存在
- ├─ scripts/dtc/dtc               自动构建（设备树编译器）
- ├─ tools/mkimage、tools/fdtgrep  自动构建
+ ├─ scripts/basic/fixdep          #已存在
+ ├─ scripts/dtc/dtc              # 自动构建（设备树编译器）
+ ├─ tools/mkimage、tools/fdtgrep  #自动构建
  └─ 交叉编译 tpl/spl/u-boot 源码
 ```
 
@@ -311,43 +397,43 @@ make all
 
 ---
 
-## 6. 目标依赖链解析（以 rk3506_defconfig 为目标）
+# 目标依赖链解析
 
-### 6.1 依赖树
+## 1.依赖树
 
-```
+```makefile
 make rk3506_defconfig
 │
-├─[目标] scripts_basic
+├─#[目标] scripts_basic
 │   └─ make -f scripts/Makefile.build obj=scripts/basic
-│       └─ fixdep ← scripts/basic/fixdep.c        （HOSTCC 编译）
+│       └─ fixdep ← scripts/basic/fixdep.c        #（HOSTCC 编译）
 │
-├─[目标] outputmakefile                             （无 O= 时空操作）
-├─[目标] FORCE                                      （恒过期）
+├─#[目标] outputmakefile                           #（无 O= 时空操作）
+├─#[目标] FORCE                                    （恒过期）
 │
 └─ make -f scripts/Makefile.build obj=scripts/kconfig rk3506_defconfig
     │
-    ├─[目标] scripts/kconfig/conf
-    │   ├─ conf.o    ← scripts/kconfig/conf.c      （HOSTCC -c）
-    │   └─ zconf.tab.o ← zconf.tab.c               （HOSTCC -c）
-    │       ├─ zconf.tab.c  ← zconf.tab.c_shipped  （SHIPPED：cat）
-    │       ├─ zconf.lex.c  ← zconf.lex.c_shipped  （SHIPPED）
-    │       └─ zconf.hash.c ← zconf.hash.c_shipped （SHIPPED）
-    │   （conf.o / zconf.tab.o 的依赖追踪调用 scripts/basic/fixdep）
+    ├─#[目标] scripts/kconfig/conf
+    │   ├─ conf.o    ← scripts/kconfig/conf.c      #（HOSTCC -c）
+    │   └─ zconf.tab.o ← zconf.tab.c               #（HOSTCC -c）
+    │       ├─ zconf.tab.c  ← zconf.tab.c_shipped  #（SHIPPED：cat）
+    │       ├─ zconf.lex.c  ← zconf.lex.c_shipped  #（SHIPPED）
+    │       └─ zconf.hash.c ← zconf.hash.c_shipped #（SHIPPED）
+    │   #（conf.o / zconf.tab.o 的依赖追踪调用 scripts/basic/fixdep）
     │
-    └─[执行] conf --defconfig=../configs/rk3506_defconfig Kconfig
-        ├─ 读 Kconfig 树（只读）
-        ├─ 读 configs/rk3506_defconfig
-        ├─ 补默认值 / 解依赖
-        └─ 写 .config + .config.old
+    └─#[执行] conf --defconfig=../configs/rk3506_defconfig Kconfig
+        ├─ #读 Kconfig 树（只读）
+        ├─ #读 configs/rk3506_defconfig
+        ├─ #补默认值 / 解依赖
+        └─ #写 .config + .config.old
 ```
 
-### 6.2 叶子清单
+## 2.叶子清单
 
 被编译的源文件（仅 4 个 C 文件）：
 
 | 产物 | 源文件 | 编译/链接规则 |
-|---|---|---|
+|:-:|:-:|:-:|
 | `scripts/basic/fixdep` | `scripts/basic/fixdep.c` | HOSTCC |
 | `scripts/kconfig/conf.o` | `scripts/kconfig/conf.c` | HOSTCC `-c` |
 | `scripts/kconfig/zconf.tab.o` | `zconf.tab.c`（由 `zconf.tab.c_shipped` 复制） | HOSTCC `-c` |
@@ -359,7 +445,7 @@ make rk3506_defconfig
 
 典型构建输出：
 
-```
+```shell
   HOSTCC  scripts/basic/fixdep
   HOSTCC  scripts/kconfig/conf.o
   SHIPPED scripts/kconfig/zconf.tab.c
@@ -374,24 +460,27 @@ make rk3506_defconfig
 
 ---
 
-## 7. 规则触发机制
+# 规则触发机制
 
-### 7.1 make 的两阶段模型
+## 1.make 的两阶段模型
 
-1. **解析阶段**：make 读取命令行指定的 makefile 文件并逐行解析，将全部规则与变量登记进内部规则库，此阶段不执行命令。
-2. **执行阶段**：从目标（goal）出发，查询规则库、构建依赖图、按需执行命令。
+1. **解析阶段**
+   make 读取命令行指定的 makefile 文件并逐行解析，将全部规则与变量登记进内部规则库，此阶段不执行命令。
+2. **执行阶段**
+   从目标（goal）出发，查询规则库、构建依赖图、按需执行命令。
 
-### 7.2 模式规则的匹配
+## 2.模式规则的匹配
 
-`make rk3506_defconfig` 中，目标 `rk3506_defconfig` 在顶层 Makefile 无显式规则，经隐式规则搜索命中模式规则 `%config`（`rk3506_defconfig` 以 `config` 结尾，stem 为 `rk3506_def`）。该规则命令体发起递归 make，子进程以 `scripts/Makefile.build` 为 makefile，目标仍为 `rk3506_defconfig`；子进程规则库中的 `%_defconfig` 命中（stem 为 `rk3506`），前置 `scripts/kconfig/conf` 触发 host 规则链构建。
+- `make rk3506_defconfig` 中，目标 `rk3506_defconfig` 在顶层 Makefile 无显式规则，经隐式规则搜索命中模式规则 `%config`（`rk3506_defconfig` 以 `config` 结尾，stem 为 `rk3506_def`）。
+- 该规则命令体发起递归 make，子进程以 `scripts/Makefile.build` 为 makefile，目标仍为 `rk3506_defconfig`；子进程规则库中的 `%_defconfig` 命中（stem 为 `rk3506`），前置 `scripts/kconfig/conf` 触发 host 规则链构建。
+- 目标名 `rk3506_defconfig` 在磁盘上不是真实文件，make 判定目标恒过期，规则命令体每次执行，`.config` 每次重新生成——配置命令须幂等可重跑。
 
-目标名 `rk3506_defconfig` 在磁盘上不是真实文件，make 判定目标恒过期，规则命令体每次执行，`.config` 每次重新生成——配置命令须幂等可重跑。
 
-### 7.3 include 机制
+## 3.include 机制
 
 `scripts/Makefile.build` 第 57~59 行：
 
-```make
+```makefile
 kbuild-dir  := $(if $(filter /%,$(src)),$(src),$(srctree)/$(src))
 kbuild-file := $(if $(wildcard $(kbuild-dir)/Kbuild),$(kbuild-dir)/Kbuild,$(kbuild-dir)/Makefile)
 include $(kbuild-file)
@@ -404,10 +493,10 @@ include $(kbuild-file)
 
 ---
 
-## 8. 关键文件索引
+# 关键文件索引
 
 | 文件 | 作用 |
-|---|---|
+|---|:--|
 | `configs/rk3506_defconfig` | RK3506 默认配置（171 行） |
 | `Kconfig`（顶层） | 配置树根，`source` 各子系统 Kconfig |
 | `arch/arm/Kconfig` | `SYS_CPU` 默认 `"armv7"`（CPU_V7 时） |
@@ -415,8 +504,8 @@ include $(kbuild-file)
 | `arch/arm/mach-rockchip/rk3506/Kconfig` | `TARGET_EVB_RK3506`、`SYS_SOC="rockchip"` |
 | `board/rockchip/evb_rk3506/Kconfig` | `SYS_BOARD`、`SYS_VENDOR`、`SYS_CONFIG_NAME` |
 | `include/configs/rk3506_common.h` / `evb_rk3506.h` | SoC/板级配置头文件 |
-| `Makefile`（顶层） | `%config`（485 行）、`scripts_basic`（404 行）、`auto.conf` 规则（515 行）、`u-boot` 链接（1290 行）、SPL/TPL 目标（1446/1465 行） |
-| `scripts/Makefile.build` | kbuild 降目录构建入口（`include` kbuild-file、host 规则装载）；`builtin-target` 判定（108~110 行）、built-in.o 链接规则（350~361 行）、递归下降（423~425 行） |
+| `Makefile`（顶层） | `%config`（485 行）、`scripts_basic`（404 行）、`auto.conf` 规则（515 行）、`all` 目标（875 行）、`libs-y`（658~728 行）、`u-boot` 链接（1290 行）、目录递归（1312~1314 行）、SPL/TPL 目标（1446/1465 行） |
+| `scripts/Makefile.build` | kbuild 降目录构建入口（`include` kbuild-file、host 规则装载）；`builtin-target` 判定（108~110 行）、built-in.o 链接规则（350~361 行）、`%.o: %.c` 编译规则（279~281 行）、`cmd_cc_o_c`（206 行）、递归下降（423~425 行） |
 | `scripts/Makefile.host` | 宿主程序编译/链接规则（host-cobjs/host-cmulti，103~116 行） |
 | `scripts/Makefile.lib` | `_shipped` 复制规则（249~252 行）、DTB 规则、`multi_depend` 依赖注入（198~202 行） |
 | `scripts/Makefile.spl` | SPL/TPL 构建（`obj=spl`/`obj=tpl` 时的规则库） |
@@ -433,9 +522,9 @@ include $(kbuild-file)
 
 ---
 
-## 9. Kconfig 语法参考
+# Kconfig 语法参考
 
-### 9.1 语法总则
+## 1.语法总则
 
 - 每条语句以换行结束；行首 `#` 为注释。
 - 符号名约定全大写（省略 `CONFIG_` 前缀），如 `ROCKCHIP_RK3506`。
@@ -443,11 +532,11 @@ include $(kbuild-file)
 - 缩进无语义作用，仅用于可读性；`help` 文本的缩进除外（见 9.2）。
 - 语句可按条件嵌套于 `if ... endif` 与 `menu ... endmenu` 块内。
 
-### 9.2 符号定义
+## 2.符号定义
 
 语法模板（属性顺序非强制，通常按此排列）：
 
-```
+```Kconfig
 config <SYMBOL>
 	<type> [prompt]
 	[default <expr> [if <expr>]]
@@ -558,3 +647,176 @@ endif
 - `make -f scripts/Makefile.build obj=scripts/kconfig -p rk3506_defconfig`：`-p` 打印规则库，可检索 `%_defconfig` 等规则。
 - 配置完成后核对连锁反应：`grep -E "CPU_V7|^CONFIG_SPL=|^CONFIG_TPL=|TPL_TINY" .config`。
 - 编译后核对各阶段产物：`spl/u-boot-spl.map`、`u-boot.map` 中的符号，或对照各目录 Makefile 的 `obj-*` 行。
+
+# U-Boot构建流程
+
+## 1. U-Boot源码下载
+
+直接从RockChip官方的github上下载，该源码也是基于官网的UBoot修改而来，已经能支持更多的RK芯片开发板，帮助我们节省了许多的操作。
+
+```shell
+git clone https://github.com/rockchip-linux/u-boot.git
+```
+
+## 2.U-Boot官方流程
+
+### 1.配置交叉编译工具链
+
+```bash
+export CROSS_COMPILE=arm-linux-gnueabi- #注意需要在root下执行，因为sudo make ... → 用 root 身份开全新环境，默认清空环境变量（env_reset）→ CROSS_COMPILE 被丢弃 → make 回落用原生 gcc
+#或
+export CROSS_COMPILE=arm-linux-gnueabihf-
+#注意arm-linux-gnueabihf-不支持armv5.只支持armv5t，而RockChip的U-Boot源码有下列情况：
+```
+
+```bash
+error:While ARM Cortex-A8 support ARM v7 instruction set (-march=armv7a) we compile
+with -march=armv5 to allow more compilers to work. For U-Boot code this has
+no performance impact.
+```
+
+从这段 comment 来看，这里的设计思路是为了兼容更多编译器，故意将本应使用`-march=armv7a`（Cortex-A8 支持的架构版本）的编译选项降为`-march=armv5`，并认为这对 U-Boot 代码的性能没有影响。但这就与编译器（`arm-linux-gnueabihf-gcc`）冲突了，它不支持`-march=armv5`这个参数（它只支持`armv5t`、`armv5te`等更具体的子版本）。
+
+1. **修改架构参数**：
+
+   按照编译器支持的格式，将`-march=armv5`改为`-march=armv5t`（这是最接近且兼容性最好的选项），同时保留这个兼容更多编译器的设计思路。
+
+2. **使用适合的编译器**：
+
+   寻找支持`-march=armv5`参数的旧版本 ARM 编译器（如某些特定版本的`arm-linux-gnueabi-gcc`），但这种方法不推荐，因为旧编译器可能带来其他兼容性问题。
+
+### 2.配置板级配置
+
+```bash
+#U-Boot is intended to be simple to build. After installing the
+#sources you must configure U-Boot for one specific board type. This
+#is done by typing:
+make rk3506_defconfig
+#where "NAME_defconfig" is the name of one of the existing configu-
+#rations; see boards.cfg for supported names.
+```
+
+### 3.设置编译输出路径
+
+在编译 U-Boot 时，如何将编译产物（目标文件、镜像等）输出到**源代码目录之外的外部目录**，而不是默认存放在源代码目录中。下列两种方法可以避免污染源代码目录，方便多版本或多配置编译。
+
+#### 1.添加 `O=输出目录`
+
+通过在每次执行 `make` 命令时，用 `O=` 指定编译产物的存放路径。示例步骤：
+
+```bash
+# 清理外部目录的编译残留（首次使用或切换配置时）
+make O=/tmp/build distclean
+
+# 生成名为 NAME_defconfig 的配置（NAME 是具体开发板型号，如 rk3506-evb_defconfig）
+make O=/tmp/build NAME_defconfig
+
+# 开始编译，所有产物（.o 文件、u-boot.bin 等）会存到 /tmp/build 目录
+make O=/tmp/build all
+```
+
+- 特点：每次执行 `make` 都需要显式指定 `O=目录`，适合临时编译或单次构建。
+
+#### 2.通过环境变量指定
+
+设置环境变量 `KBUILD_OUTPUT` 指向目标目录，后续 `make` 命令会自动使用该目录。示例步骤：
+
+```bash
+# 导出环境变量，指定输出目录
+export KBUILD_OUTPUT=/tmp/build
+
+# 清理编译残留
+make distclean
+
+# 生成配置
+make NAME_defconfig
+
+# 开始编译，产物自动存到 /tmp/build 目录
+make all
+```
+
+- 特点：一次设置后，后续所有 `make` 命令都会生效，适合持续开发或多次编译同一配置。
+
+## 3.编译构建
+
+```bash
+#Finally, type "make all", and you should get some working U-Boot
+#images ready for download to / installation on your system:
+make all
+#- "u-boot.bin" is a raw binary image
+#- "u-boot" is an image in ELF binary format
+#- "u-boot.srec" is in Motorola S-Record format
+```
+
+## 4.固件打包
+
+## 8. RockChip构建脚本构建
+
+# U-Boot构建产物
+
+## 9. U-Boot.lds
+
+
+
+## 10. U-Boot.img
+
+生成规则位置：顶层Makefile中。
+
+```makefile
+u-boot-dtb.img u-boot.img u-boot.kwb u-boot.pbl u-boot-ivt.img: \
+		$(if $(CONFIG_SPL_LOAD_FIT),u-boot-nodtb.bin dts/dt.dtb,u-boot.bin) FORCE
+	$(call if_changed,mkimage)
+#根据配置（CONFIG_SPL_LOAD_FIT）选择用 “分开的 U-Boot 主体 + 设备树” 还是 “整合好的 U-Boot 主体”。
+```
+
+
+
+# U-Boot官方工具
+
+## 1. mkimage
+
+### 1.概念介绍
+
+`mkimage` 是 U-Boot 官方提供的镜像生成工具，主要用于给二进制文件（如 U-Boot 二进制、内核镜像）添加标准化头部，或生成 FIT 镜像，让镜像能被 U-Boot/SPL 正确识别和加载。没有 `mkimage`，`u-boot.bin` 只是一个 “裸二进制文件”，**U-Boot 的SPL**启动时不知道该怎么加载；有了 `mkimage`，`u-boot.bin` 被包装成 `u-boot.img`，就有了 “身份标识”，能被 **U-Boot 的SPL**正确识别和启动。
+
+### 2.核心功能
+
+`mkimage` 的核心作用是 **“给原始二进制文件‘包装’一层‘身份信息’”**—— 就像给商品贴标签（标注名称、规格、产地），让 U-Boot 启动时能快速识别：
+
+- 这是什么类型的镜像（U-Boot？内核？设备树？）；
+- 要加载到内存的哪个地址；
+- 从哪个地址开始执行；
+- 镜像是否完整（校验和验证）。
+
+### 3.常用命令选项
+
+|  命令行选项   |                对应代码处理                |                         功能                         |
+| :-----------: | :----------------------------------------: | :--------------------------------------------------: |
+|  `-l image`   |             `params.lflag = 1`             | 列出镜像头部信息（如查看 -l`u-boot.img` 的加载地址） |
+|   `-A arch`   | `params.arch = genimg_get_arch_id(optarg)` |        指定架构（如 `-A arm` 改为 ARM 架构）         |
+|   `-a addr`   | `params.addr = strtoull(optarg, &ptr, 16)` |        指定镜像加载地址（如 `-a 0x00200000`）        |
+|    `-e ep`    |  `params.ep = strtoull(optarg, &ptr, 16)`  |      指定镜像执行入口地址（通常与加载地址相同）      |
+| `-d datafile` |         `params.datafile = optarg`         |      指定输入原始二进制文件（如 `u-boot.bin`）       |
+|   `-T type`   | `params.type = genimg_get_type_id(optarg)` |    指定镜像类型（如 `-T uboot` 生成 U-Boot 镜像）    |
+| `-f fit.its`  |       `params.type = IH_TYPE_FLATDT`       |           生成 FIT 镜像（需传入 ITS 脚本）           |
+
+例如，生成 `u-boot.img` 的典型命令是：
+
+```bash
+mkimage -A arm -O linux -T uboot -C none -a 0x00200000 -e 0x00200000 -n "RK3506 U-Boot" -d u-boot.bin u-boot.img
+```
+
+### 4.底层逻辑
+
+以命令 `mkimage -A arm -a 0x00200000 -e 0x00200000 -d u-boot.bin u-boot.img` 为例，代码的执行流程是：
+
+1. `process_args()`解析参数：
+   - `params.arch = IH_ARCH_ARM`（ARM 架构）；
+   - `params.addr = 0x00200000`（加载地址）；
+   - `params.ep = 0x00200000`（执行地址）；
+   - `params.datafile = "u-boot.bin"`（输入文件）；
+   - `params.imagefile = "u-boot.img"`（输出文件）。
+2. `imagetool_get_type()` 匹配镜像类型：按 `params.type`（默认 `IH_TYPE_KERNEL`，但实际会被 `-T uboot` 改为 `IH_TYPE_UBOOT`）找到 U-Boot 镜像处理模板；
+3. 生成头部：按 U-Boot 镜像格式，生成包含 ARM 架构、0x00200000 加载地址、校验和的头部，写入 `u-boot.img` 开头；
+4. 写入数据：将 `u-boot.bin` 的内容写入头部之后；
+5. 打印信息：输出镜像的名称、大小、加载地址等（就是执行命令后看到的日志）。

@@ -110,7 +110,65 @@ rm <FILENAME>			#删除文件
 
 ## 4.批量编辑文本文件
 
-`sed`命令来自英文词组stream editor的缩写，其功能是利用语法/脚本对文本文件进行批量的编辑操作。sed命令最初由贝尔实验室开发，后被众多Linux系统集成，能够通过正则表达式对文件进行批量编辑，让重复性的工作不再浪费时间。
+`sed`(stream editor，流编辑器)，通过脚本/正则对文本文件逐行批量编辑。**默认不改原文件**，结果输出到终端，加`-i`才直接改文件。
+
+```bash
+sed [选项] [脚本] 文件
+	[选项]
+		-n		#quiet(静默)模式，屏蔽默认输出，只打印被处理的行(配合p)
+		-i		#in-place(就地)修改原文件，危险，改前先备份
+		-i.bak	#修改前自动备份为"文件.bak"
+		-e		#expression(命令)，一次执行多条  eg:sed -e 's/a/b/' -e 's/c/d/' file
+		-E(-r)	#extended(扩展)正则表达式
+
+	[脚本-替换]   #类似于vim编辑器
+	s/旧/新/		#s=substitute(替换)，把每行第一个"旧"替换为"新"
+	s/旧/新/g		#g=global(全局)，把每行所有"旧"替换为"新"
+	s|旧|新|g		#以|为分隔符，替换含/的路径不用转义
+
+	[脚本-定位+动作]
+	3,5d		#d=delete(删除)第3~5行，","表示"到"(范围)
+	/xxx/d		#/xxx/=正则定位含xxx的行，再删除
+	$d			#$=最后一行地址，删除最后一行
+	3,5p		#p=print(打印)第3~5行(配合-n)
+	/xxx/p		#打印匹配xxx的行，等同grep
+	2a\xxx		#a=append(追加)，在第2行后追加
+	2i\xxx		#i=insert(插入)，在第2行前插入
+
+#原理：sed默认"处理完自动打印每一行"，故替换类命令不加-n也能看到全部结果
+#     -n关闭自动打印，此时只有p才输出，用于筛选
+#坑：sed 'p' file 每行打印2遍(p手动+自动各一遍)；配-n只打印1遍
+
+#实例：把file.txt所有old替换成new，直接改文件并备份
+sed -i.bak 's/old/new/g' file.txt
+
+#实例：只查看第5行
+sed -n '5p' file.txt
+
+#实例：删除注释行和空行
+sed -e '/^#/d' -e '/^$/d' file.txt
+
+#实例：打印从含start到含end之间的行
+sed -n '/start/,/end/p' file.txt
+
+#实例：统计CPU核心数(喂给make -j用)，结果存入变量JOB
+JOB=`sed -n '/processor/p' /proc/cpuinfo | wc -l`
+	反引号`..`		#命令置换，命令输出存入变量，等同$(..)
+	/processor/p	#只打印含processor的行，/proc/cpuinfo每核一行
+	| wc -l			#管道，统计打印行数=核数
+#注意：脚本里别写N;，sed中单独N是"把下一行拼进当前行"的命令，不是第N行
+#等价简写：grep -c processor /proc/cpuinfo    或    nproc
+
+#补充：模式空间(pattern space)+N命令(多行处理)
+#sed读一行放进模式空间，脚本在它上面操作，处理完(默认)打印
+#N(大写)=append next line，把下一行也读进来，追加到模式空间，拼成两行处理(中间\n隔开)
+#对比：
+#	n(小写)	#跳过当前行，直接读下一行
+#	N(大写)	#把下一行追加进模式空间，拼成两行当整体
+#	D		#只删模式空间的第一行
+#	P(大写)	#只打印模式空间的第一行
+#例：文件content两行foo/bar，sed -n 'N;p' 把两行拼一起打印
+```
 
 # 系统管理
 
@@ -200,7 +258,7 @@ chmod [u | g | o | a(all)]  [+ | - | =]  [r | w | x] <FILENAME>
 
 # 网络相关
 
-### 1.网络测速
+## 1.网络测速
 
 ```bash
 iperf3 -s #在服务器上运行,这将启动一个监听默认端口（5201）的服务器
@@ -392,6 +450,25 @@ ls pwd   #系统以为ls列出名为pwd的文件
 ls `pwd` #先执行pwd，再ls就是ls当前目录的内容了
 ```
 
+# shell脚本安全(set选项)
+
+set是bash内置的选项开关，写在脚本开头，控制脚本"出错怎么办"
+
+```bash
+set -e			#errexit(出错即退)：脚本中任何命令失败(返回非0)立即退出
+set -u			#nounset：使用未定义变量直接报错退出
+set -x			#xtrace：先打印每条命令再执行，调试用
+set -o pipefail	#管道中任一段失败都算失败(默认只看最后一段退出码)
+
+#!/bin/bash
+set -euo pipefail	#脚本开头三件套：出错即停+变量防呆+管道防漏
+```
+
+注：
+- 默认bash命令失败只返回非0不停，后续行照跑，错误易被忽略
+- set -e 管不到 if 条件里的命令，if grep xxx; then 中grep找不到不算失败(设计如此)
+- 只对当前shell/脚本生效
+
   # 环境变量相关
 
 - **在当前shell环境中执行脚本或加载配置文件**
@@ -414,6 +491,34 @@ ls `pwd` #先执行pwd，再ls就是ls当前目录的内容了
   echo $PROJECT_ROOT
   echo $API_KEY
   ```
+
+## sudo 环境变量清空（env_reset）
+
+`sudo` 默认启用 `env_reset`：以 root 身份启动的全新环境中，仅保留 PATH 等安全变量，
+其余环境变量均被清空。因此 `export` 设置的环境变量，在 `sudo` 启动的进程中不可见。
+
+```bash
+# 反例：export 对 sudo 无效
+export CROSS_COMPILE=arm-none-linux-gnueabihf-
+sudo make all                    # make 读到 CROSS_COMPILE 为空，回落默认 gcc
+
+# 正例：内联传参（make 命令行变量，不依赖环境）
+sudo make CROSS_COMPILE=arm-none-linux-gnueabihf- all
+
+# 或：sudo -E 保留环境变量
+export CROSS_COMPILE=arm-none-linux-gnueabihf-
+sudo -E make all
+```
+
+验证 sudo 环境内变量是否存在，需用单引号阻止当前 shell 提前展开：
+
+```bash
+sudo echo $CROSS_COMPILE              # 有值：当前 shell 已展开，非 sudo 环境
+sudo bash -c 'echo $CROSS_COMPILE'    # 空：sudo 环境中确无此变量
+```
+
+注：shell 在命令执行前先展开 `$变量`。`sudo echo $X` 中 `$X` 由当前 shell
+展开成字符串后才交给 sudo，故不能以此判断变量是否进入 sudo 环境。
 
 ## 	3.软件包管理
 
