@@ -1,6 +1,6 @@
 # 引导程序
 
-​	Bootloader是在操作系统运行之前运行的一小段代码，用于将软硬件环境初始化到一个合适的状态，比如初始化时钟，中断，`DRAM`控制器等外设，为操作系统的加载和运行做准备（其本身不是操作系统），再把Linux从Flash拷贝到`DRAM`中，最后再启动Linux内核。Bootloader是启动引导程序的统称，类似于操作系统与Linux的概念，嵌入式Linux常用的Bootloader是U-Boot。
+Bootloader是在操作系统运行之前运行的一小段代码，用于将软硬件环境初始化到一个合适的状态，比如初始化时钟，中断，`DRAM`控制器等外设，为操作系统的加载和运行做准备（其本身不是操作系统），再把Linux从Flash拷贝到`DRAM`中，最后再启动Linux内核。Bootloader是启动引导程序的统称，类似于操作系统与Linux的概念，嵌入式Linux常用的Bootloader是U-Boot。
 
 ------
 
@@ -37,24 +37,22 @@
 
 # U-Boot初始化流程
 
-## 1.U-Boot启动过程
+## 1.总体启动流程
+在嵌入式 Linux  系统开发、BSP 适配及新平台 bring-up 过程中，Bootloader 的启动流程往往决定了整个系统移植和硬件支持的复杂度。U-Boot 作为当前主流的开源 Bootloader，其启动流程又分为带 SPL（Secondary Program Loader）与不带 SPL两种模式。不同方案在硬件要求、启动机制、代码结构、调试思路等方面存在明显区别。以 ARM Cortex-A SoC（如 NXP i.MX6/8, Allwinner, Rockchip , STM32MP1 等）为例，完整启动链路如下：
 
-### 1.总体启动流程
-​	在嵌入式 Linux  系统开发、BSP 适配及新平台 bring-up 过程中，Bootloader 的启动流程往往决定了整个系统移植和硬件支持的复杂度。U-Boot 作为当前主流的开源 Bootloader，其启动流程又分为带 SPL（Secondary Program Loader）与不带 SPL两种模式。不同方案在硬件要求、启动机制、代码结构、调试思路等方面存在明显区别。以 ARM Cortex-A SoC（如 NXP i.MX6/8, Allwinner, Rockchip , STM32MP1 等）为例，完整启动链路如下：
-
-### 2.有 SPL 的启动流程
+## 2.有 SPL 的启动流程
 
 ```txt
 BootROM (SoC内部固件) → SPL (精简U-Boot) → U-Boot (完整版) → Linux Kernel → RootFS → User Application
 ```
 
-### 3.无 SPL 的启动流程
+## 3.无 SPL 的启动流程
 
 ```shell
 BootROM (SoC内部固件) → U-Boot (完整版) → Linux Kernel → RootFS → User Application
 ```
 
-## 2.BootROM 与 SPL 
+# BootROM 与 SPL 
 
 - **BootROM**
   不可更改，由芯片原厂烧录在 SoC 内部，只负责最基础的硬件初始化和“从外部介质加载 bootloader 到 SRAM/DRAM 并运行”。
@@ -63,27 +61,17 @@ BootROM (SoC内部固件) → U-Boot (完整版) → Linux Kernel → RootFS →
 - **完整版 U-Boot**
   具备命令行、丰富外设/协议栈支持，可做升级、调试、启动内核等。
 
-## 3.有无SPL的差异
+# 有无SPL的差异
 
-### 1.SPL 设计的核心动机
+## 1.有SPL
 
-#### 1.SPL 解决的核心问题
+SOC 上电后，可用的 SRAM 极其有限，无法直接放下大体积的 U-Boot。因此，必须先用极小的 SPL 初始化 DDR，之后将完整版 U-Boot 从外部介质加载到 DDR，再切换 到 U-Boot 运行。因为典型 Cortex-A9/A53/A72 SoC，SRAM 只有 32KB/64KB/128KB，而完整版 U-Boot 动辄数百 KB 甚至上 MB。同时需要复杂 的DRAM 初始化脚本，BootROM 能力有限。
 
-​	SOC 上电后，可用的 SRAM 极其有限，无法直接放下大体积的 U-Boot。因此，必须先用极小的 SPL 初始化 DDR，之后将完整版 U-Boot 从外部介质加载到 DDR，再切换 到 U-Boot 运行。
+## 2.无 SPL 
 
-#### 2.场景举例
+SOC 内部 SRAM 或 BootROM 能直接完成 DDR 初始化。BootROM 能直接从存储加载大容量 U-Boot 到 DDR 并运行。U-Boot 镜像尺寸可以接受（如 NOR flash 启动、小型芯片/简单板卡）。早期的 ARM9、ARM11、部分 Cortex-M4/M7，以及 MCU 级应用，内存需求不高。使用 NOR Flash，直接映射到地址空间，无需分段加载。BootROM 足够灵活/支持的 SoC（如部分 Allwinner、Rockchip、早期NXP平台等）。
 
-​	典型 Cortex-A9/A53/A72 SoC，SRAM 只有 32KB/64KB/128KB，而完整版 U-Boot 动辄数百 KB 甚至上 MB。同时需要复杂 的DRAM 初始化脚本，BootROM 能力有限。
-
-### 2.无 SPL 方案的条件
-
-​	SOC 内部 SRAM 或 BootROM 能直接完成 DDR 初始化。BootROM 能直接从存储加载大容量 U-Boot 到 DDR 并运行。U-Boot 镜像尺寸可以接受（如 NOR flash 启动、小型芯片/简单板卡）。
-
-#### 1.场景举例
-
-早期的 ARM9、ARM11、部分 Cortex-M4/M7，以及 MCU 级应用，内存需求不高。使用 NOR Flash，直接映射到地址空间，无需分段加载。BootROM 足够灵活/支持的 SoC（如部分 Allwinner、Rockchip、早期NXP平台等）。
-
-## 4.详细启动流程对比
+## 3.启动流程对比
 
 ### 1.有 SPL 启动流程详解
 
@@ -94,9 +82,6 @@ BootROM (SoC内部固件) → U-Boot (完整版) → Linux Kernel → RootFS →
 
 3. **U-Boot 主阶段**
    初始化更丰富的外设。提供 CLI/网络/升级/调试等功能。加载和启动 Linux 内核。操作系统启动。
-
-
-#### 1.核心代码片段
 
 ```c
 void board_init_f(ulong dummy)
@@ -110,8 +95,6 @@ void board_init_f(ulong dummy)
     jump_to_uboot();
 }
 ```
-
-#### 2.SPL 配置
 
 ```Kconfig
 #（典型 Kconfig/defconfig）
@@ -129,8 +112,6 @@ CONFIG_SPL_DRIVERS_MISC_SUPPORT=y
    U-Boot 自行初始化全部硬件（包含 DDR）。后续流程同上：提供 CLI、升级、内核引导等功能。
 3. **操作系统启动**
 
-#### 1.核心代码片段
-
 ```c
 void board_init_f(ulong dummy)
 {
@@ -143,44 +124,25 @@ void board_init_f(ulong dummy)
 }
 ```
 
-#### 2.配置特征
-
 .config 文件里无 CONFIG_SPL 相关选项。编译输出只有单个 U-Boot 镜像，无 u-boot-spl 文件。
 
-## 5.适用场景分析
-
-### 1.带 SPL 的优势和适用场景
-
-​	适合中高端 SOC，SRAM 远小于 U-Boot 镜像体积。支持复杂的板级初始化需求（如多片 DDR、PMIC、丰富外设）。支持多存储介质和更灵活的启动策略。可拆分初始化流程，有利于分阶段调试和维护。
-
-### 2. 无 SPL 的优势和适用场景
-
-​	平台简单、硬件初始化需求低，BootROM 或 NOR Flash 直映射即可。启动速度快，代码复杂度低，适用于量产型、成本敏感的设计。有利于初学者和小型项目快速上手。
-
-## 6.开发实践总结
+## 4.开发实践总结
 
 ### 1.如何判断需要 SPL
 
-​	检查 SoC 文档“BootROM 支持的最大加载大小”、“上电后可用的 SRAM/DRAM 初始化流程”。**若 U-Boot 体积超过 BootROM 一次性可加载容量**，必须引入 SPL。
-
-​	若平台/芯片厂商提供的参考 U-Boot 都有 SPL 分段，说明其硬件需要这种启动分阶段。
+检查 SoC 文档“BootROM 支持的最大加载大小”、“上电后可用的 SRAM/DRAM 初始化流程”。**若 U-Boot 体积超过 BootROM 一次性可加载容量**，必须引入 SPL。若平台/芯片厂商提供的参考 U-Boot 都有 SPL 分段，说明其硬件需要这种启动分阶段。
 
 ### 2.编译与适配流程
 
-- **有 SPL**
-  	编译时会生成 u-boot-spl/u-boot-spl.bin，同时 u-boot/u-boot.bin/elf，烧录脚本须注意 SPL 与主镜像分区、拼接位置等。
-- **无 SPL**
-          只有主镜像直接烧录，启动配置/烧写脚本更简单。
+有 SPL**编译时会生成 u-boot-spl/u-boot-spl.bin，同时 u-boot/u-boot.bin/elf，烧录脚本须注意 SPL 与主镜像分区、拼接位置等。无 SPL只有主镜像直接烧录，启动配置/烧写脚本更简单。
 
 ### 3.调试和移植
 
 - 有 SPL 时遇到 DDR 问题，建议优先只修改/调试 SPL，主 U-Boot 尽量保持稳定。
 - 无 SPL 时，所有初始化和调试均集中于 U-Boot 代码，调试窗口更大但也更易出错。
 
-### 4.示例场景
-
 ```c
-Q1：我怎么判断我的平台当前用不用 SPL？
+Q1：怎么判断我的平台当前用不用 SPL？
 查 .config/defconfig 是否有 CONFIG_SPL=y，或者编译输出目录有无 u-boot-spl。
 查阅官方 BSP 用户手册，查看推荐的启动分段方案。
     
@@ -197,66 +159,6 @@ Q4：如果引导流程挂死，如何排查是 SPL 还是 U-Boot 的问题？
 可以定制 SPL 提示灯/蜂鸣器等硬件动作，辅助区分。
 ```
 
-## 7.无SPL的一个疑问
-
-### 1.启动执行过程
-```bash
-#BootROM 执行： 
-	SOC 上电后，BootROM 直接从外部存储加载完整 U-Boot 镜像到内存（一般是 DDR）并执行。 
-#U-Boot 阶段： 
-	U-Boot 自行初始化全部硬件（包含 DDR）。 后续流程同上：提供 CLI、升级、内核引导等功能。 
-#问题引出：
-	U-Boot镜像直接加载到DDR运行，那为啥U-boot后面还要初始化DDR？
-```
-
-### 2.解释
-​	这个问题的核心在于：**BootROM 对 DDR 的初始化可能是 “临时且有限的”，而 U-Boot 对 DDR 的初始化是 “完整且适配系统需求的”**。两者的目标和能力存在本质差异，具体原因如下：
-
-#### 1.BootROM 的 DDR 操作
-
-​	仅为 “加载镜像” 服务，而非 “完整使用”。BootROM 是 SOC 出厂时固化在芯片内部的极简程序，它的核心目标是 **“把 U-Boot 镜像从外部存储（如 eMMC、SPI Flash）加载到内存（DDR）并启动”**，而非 “为整个系统提供稳定可用的 DDR 环境”。其对 DDR 的操作通常有以下限制：
-
-1. **初始化程度有限**
-   BootROM 可能仅完成 DDR 的 **“最小化初始化”**（如基本时序配置、电压设置），足以让 DDR 临时存储数据，但未优化性能（如未设置最高频率、未启用多通道、未校准信号完整性）。
-   例如：某 SOC 的 DDR 支持 1600Mbps，但 BootROM 可能仅以 400Mbps 初始化，仅保证 “能加载镜像”，无法满足后续系统对带宽的需求。
-2. **依赖固定配置**
-   BootROM 的 DDR 配置是 **“通用预设”**（针对该 SoC 支持的主流 DDR 型号），无法适配所有定制化硬件。
-   例如：若开发板使用了 BootROM 预设之外的 DDR 型号（如不同容量、不同厂商的颗粒），BootROM 的初始化可能失败或不稳定，导致 U-Boot 镜像加载后无法正常执行。
-3. **不负责内存管理**
-   BootROM 仅关心 “将 U-Boot 镜像加载到 DDR 的某个地址”，但不会划分内存区域（如预留内核空间、设备树空间、环境变量空间），也不会检测内存错误（如坏块）。
-
-#### 2.U-Boot 初始化 DDR 
-
-​	核心目的是为 “全系统” 提供可靠内存环境，U-Boot 作为系统启动的 “总管家”，需要确保 DDR 满足后续所有操作（自身运行、内核加载、用户交互等）的需求，因此必须重新初始化 DDR，具体包括：
-
-1. **精确适配硬件**
-   U-Boot 会根据 **板级配置**（如 `board/xxx/xxx.c` 中的 DDR 参数）和 DDR 芯片手册，配置最匹配的时序（tCL、tRCD 等）、频率、电压、通道模式（单通道 / 双通道），确保 DDR 在当前硬件上稳定运行。
-   例如：开发板使用了 3200Mbps 的 LPDDR4，U-Boot 会将其配置到最高频率，而 BootROM 可能仅用 1600Mbps 加载镜像。
-2. **完善内存管理**
-   U-Boot 会划分 DDR 内存布局（通过 `global_data` 和内存池管理），明确哪些区域用于 U-Boot 自身、哪些用于内核、哪些用于设备树、哪些用于环境变量等，避免内存冲突。同时，U-Boot 可能会执行内存检测（如 `memtest` 命令），标记坏块，确保后续使用的内存区域可靠。
-3. **支持高级功能**
-   部分场景下，U-Boot 需要启用 DDR 的高级特性（如 ECC 错误校验、内存加密、低功耗模式），这些功能通常超出 BootROM 的能力范围，必须由 U-Boot 初始化。
-4. **兼容 “无 BootROM 初始化” 的场景**
-   并非所有 SOC 的 BootROM 都会初始化 DDR。
-   例如：部分低成本芯片的 BootROM 仅能从 SPI Flash 加载 U-Boot 到 SRAM（而非 DDR），此时 U-Boot 必须完全从零开始初始化 DDR，否则无法使用大容量内存。为了统一代码路径，即使 BootROM 做了部分初始化，U-Boot 也会执行完整流程，确保兼容性。
-
-### 3.典型流程
-
-BootROM 与 U-Boot 的 DDR 操作分工，以常见的 ARM 架构 SOC 为例，流程通常是：
-
-1. **BootROM 阶段**
-   - 上电后执行内部 ROM 程序，尝试从外部存储（如 eMMC）读取 U-Boot 镜像。
-   - 若需要加载到 DDR，会用预设的极简参数临时初始化 DDR（仅保证能存数据），然后将 U-Boot 镜像加载到 DDR 的指定地址（如 `0x80080000`）。
-   - 跳转到 DDR 中的 U-Boot 入口（此时 U-Boot 开始执行，但 DDR 尚未完全就绪）。
-2. **U-Boot 阶段**
-   - 进入 `lowlevel_init` 或 `board_init_f` 函数，首先执行 **完整的 DDR 初始化**（覆盖 BootROM 的临时配置），设置正确的时序、频率等参数。
-   - 初始化完成后，U-Boot 会将自身**重定位**到 DDR 的合适位置（如内存顶部），并划分内存区域。
-   - 后续流程（加载内核、启动系统）均基于 U-Boot 初始化后的稳定 DDR 环境。
-
-### 4.总结
-
-​	BootROM 对 DDR 的操作是 “临时应急”，仅为加载 U-Boot 服务；而 U-Boot 对 DDR 的初始化是 “系统级准备”，为整个启动流程（包括自身运行、内核加载）提供稳定、高性能、适配硬件的内存环境。两者目标不同，因此 U-Boot 必须重新初始化 DDR，不能依赖 BootROM 的有限操作。
-
 # 板级初始化流程
 
 > [!NOTE]
@@ -265,13 +167,12 @@ BootROM 与 U-Boot 的 DDR 操作分工，以常见的 ARM 架构 SOC 为例，�
 
 ## 1.整体流程概述
 
-​	此流程板卡（boards）预设的启动流程（intended start-up flow”，即硬件板卡正常启动时应遵循的标准步骤。该启动流程对两类程序均适用 ——**SPL（Secondary Program Loader，二级程序加载器）** 和 **U-Boot proper（标准 U-Boot 程序）**，且二者需遵循相同规则（follow the same rules）。
+此流程板卡（boards）预设的启动流程（intended start-up flow”，即硬件板卡正常启动时应遵循的标准步骤。该启动流程对两类程序均适用 ——**SPL（Secondary Program Loader，二级程序加载器）** 和 **U-Boot proper（标准 U-Boot 程序）**，且二者需遵循相同规则（follow the same rules）。
 
 ```c
 //U-Boot（包括 SPL 和主 U-Boot）的板级初始化遵循统一规则，核心流程为：
 架构相关的start.S → lowlevel_init() → board_init_f() → （BSS 清除 + U-Boot镜像重定位） → board_init_r() → main_loop()
 
-    
 //main_loop：uboot-主循环
 //起点：从架构 / CPU 专属的start.S开始（如 ARMv7 的 `arch/arm/cpu/armv7/start.S`），这是汇编级别的启动入口。
 //核心目标：逐步搭建硬件环境（从最基础的执行条件到完整的内存 / 外设可用），最终进入 U-Boot 主循环处理命令和启动系统。
