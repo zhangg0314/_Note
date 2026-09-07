@@ -19,7 +19,7 @@ RK3506 U-Boot 的构建分为三个阶段：
 最终产物链：
 
 ```shell
-tpl/u-boot-tpl.bin + spl/u-boot-spl.bin  →  idblock.bin（引导镜像）
+tpl/u-boot-tpl.bin + spl/u-boot-spl.bin  →  idblock.img（引导镜像）
 u-boot-nodtb.bin + u-boot.dtb + tee.bin  →  uboot.img（FIT 格式，含 OP-TEE）
 ```
 
@@ -781,7 +781,7 @@ u-boot-dtb.img u-boot.img u-boot.kwb u-boot.pbl u-boot-ivt.img: \
 
 ### 2.核心功能
 
-`mkimage` 的核心作用是 **“给原始二进制文件‘包装’一层‘身份信息’”**—— 就像给商品贴标签（标注名称、规格、产地），让 U-Boot 启动时能快速识别：
+`mkimage` 的核心作用是 给原始二进制文件包装一层身份信息—— 就像给商品贴标签（标注名称、规格、产地），让 U-Boot 启动时能快速识别：
 
 - 这是什么类型的镜像（U-Boot？内核？设备树？）；
 - 要加载到内存的哪个地址；
