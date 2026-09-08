@@ -35,14 +35,12 @@ Bootloader是在操作系统运行之前运行的一小段代码，用于将软�
 
 ## 2.第二阶段
 
-​	初始化一个串口，检测系统内存映射，将内核映像和根文件系统映像从Flash上读到DRAM空间中，为内核**设置启动参数**，调用内核。
-
-这种分层设计既保证了对不同硬件的兼容性（通过板级函数定制），又维持了 U-Boot 核心逻辑的统一性（通用代码路径），同时 SPL 与主 U-Boot 共享同一套规则，简化了跨阶段开发。
+初始化一个串口，检测系统内存映射，将内核映像和根文件系统映像从Flash上读到DRAM空间中，为内核**设置启动参数**，调用内核。这种分层设计既保证了对不同硬件的兼容性（通过板级函数定制），又维持了 U-Boot 核心逻辑的统一性（通用代码路径），对于带SPL启动流程的， SPL 与主 U-Boot 也共享同一套规则，这种设计简化了跨阶段开发。
 
 # U-Boot初始化流程
 
 ## 1.总体启动流程
-在嵌入式 Linux  系统开发、BSP 适配及新平台 bring-up 过程中，Bootloader 的启动流程往往决定了整个系统移植和硬件支持的复杂度。U-Boot 作为当前主流的开源 Bootloader，其启动流程又分为带 SPL（Secondary Program Loader）与不带 SPL两种模式。不同方案在硬件要求、启动机制、代码结构、调试思路等方面存在明显区别。以 ARM Cortex-A SoC（如 NXP i.MX6/8, Allwinner, Rockchip , STM32MP1 等）为例，完整启动链路如下：
+在嵌入式 Linux  系统开发、BSP 适配及新平台 bring-up 过程中，Bootloader 的启动流程往往决定了整个系统移植和硬件支持的复杂度。U-Boot 作为当前主流的开源 Bootloader，其启动流程又分为带 SPL（Secondary Program Loader）与不带 SPL两种模式。不同方案在硬件要求、启动机制、代码结构、调试思路等方面存在明显区别。以 ARM Cortex-A SoC（如 NXP i.MX6/8, Allwinner, Rockchip , STM32MP1 等）为例，完整启动链路如下
 
 ## 2.有 SPL 的启动流程
 
@@ -59,9 +57,9 @@ BootROM (SoC内部固件) → U-Boot (完整版) → Linux Kernel → RootFS →
 ## 4.BootROM 与 SPL 
 
 - **BootROM**
-  不可更改，由芯片原厂烧录在 SoC 内部，只负责最基础的硬件初始化和“从外部介质加载 bootloader 到 SRAM/DRAM 并运行”。
+  不可更改，由芯片原厂烧录在 SoC 内部，只负责最基础的硬件初始化和从外部介质加载 bootloader 到 SRAM/DRAM 并运行”。
 - **SPL**
-  U-Boot 的精简版，用于解决“内部SRAM容量有限，无法一次加载完整版 U-Boot”时的硬件初始化需求（如 DDR、时钟、简单外设）。
+  U-Boot 的精简版，用于解决内部SRAM容量有限，无法一次加载完整版 U-Boot时的硬件初始化需求（如 DDR、时钟、简单外设）。
 - **完整版 U-Boot**
   具备命令行、丰富外设/协议栈支持，可做升级、调试、启动内核等。
 
@@ -84,21 +82,21 @@ SOC 内部 SRAM 或 BootROM 能直接完成 DDR 初始化。BootROM 能直接从
 2. **SPL 阶段**
    初始化必要硬件（主要是时钟/DDR）。极简驱动，仅包含板级初始化和加载U-Boot代码的功能。加载完整 U-Boot 镜像到 DDR。跳转至 U-Boot：SPL 跳转到 DDR 内的 U-Boot 入口，后者接管控制权。
 
+   ```c
+   void board_init_f(ulong dummy)
+   {
+       // 最小化硬件初始化
+       arch_cpu_init();
+       spl_init();
+       dram_init();
+       // 读取并加载主 U-Boot
+       spl_load_image();
+       jump_to_uboot();
+   }
+   ```
+   
 3. **U-Boot 主阶段**
    初始化更丰富的外设。提供 CLI/网络/升级/调试等功能。加载和启动 Linux 内核。操作系统启动。
-
-```c
-void board_init_f(ulong dummy)
-{
-    // 最小化硬件初始化
-    arch_cpu_init();
-    spl_init();
-    dram_init();
-    // 读取并加载主 U-Boot
-    spl_load_image();
-    jump_to_uboot();
-}
-```
 
 ```Kconfig
 #（典型 Kconfig/defconfig）
@@ -114,31 +112,29 @@ CONFIG_SPL_DRIVERS_MISC_SUPPORT=y
    SOC 上电后，BootROM 直接从外部存储加载完整 U-Boot 镜像到内存（一般是 DDR）并执行。
 2. **U-Boot 阶段**
    U-Boot 自行初始化全部硬件（包含 DDR）。后续流程同上：提供 CLI、升级、内核引导等功能。
+   
+   ```c
+   void board_init_f(ulong dummy)
+   {
+       // 直接初始化所有硬件
+       arch_cpu_init();
+       dram_init();
+       peripheral_init();
+       // 进入命令行或直接启动内核
+       main_loop();
+   }
+   ```
 3. **操作系统启动**
-
-```c
-void board_init_f(ulong dummy)
-{
-    // 直接初始化所有硬件
-    arch_cpu_init();
-    dram_init();
-    peripheral_init();
-    // 进入命令行或直接启动内核
-    main_loop();
-}
-```
-
-.config 文件里无 CONFIG_SPL 相关选项。编译输出只有单个 U-Boot 镜像，无 u-boot-spl 文件。
 
 ## 7.开发实践总结
 
-### 1.如何判断需要 SPL
+### 1.需要 SPL判断
 
-检查 SoC 文档“BootROM 支持的最大加载大小”、“上电后可用的 SRAM/DRAM 初始化流程”。**若 U-Boot 体积超过 BootROM 一次性可加载容量**，必须引入 SPL。若平台/芯片厂商提供的参考 U-Boot 都有 SPL 分段，说明其硬件需要这种启动分阶段。
+检查 SoC 文档BootROM 支持的最大加载大小、上电后可用的 SRAM/DRAM 初始化流程。**若 U-Boot 体积超过 BootROM 一次性可加载容量**，必须引入 SPL。若平台/芯片厂商提供的参考 U-Boot 都有 SPL 分段，说明其硬件需要这种启动分阶段。
 
 ### 2.编译与适配流程
 
-有 SPL**编译时会生成 u-boot-spl/u-boot-spl.bin，同时 u-boot/u-boot.bin/elf，烧录脚本须注意 SPL 与主镜像分区、拼接位置等。无 SPL只有主镜像直接烧录，启动配置/烧写脚本更简单。
+有 SPL编译时会生成 u-boot-spl/u-boot-spl.bin，同时 u-boot/u-boot.bin/elf，烧录脚本须注意 SPL 与主镜像分区、拼接位置等。无 SPL只有主镜像直接烧录，启动配置/烧写脚本更简单。
 
 ### 3.调试和移植
 
@@ -146,19 +142,11 @@ void board_init_f(ulong dummy)
 - 无 SPL 时，所有初始化和调试均集中于 U-Boot 代码，调试窗口更大但也更易出错。
 
 ```c
-Q1：怎么判断我的平台当前用不用 SPL？
-查 .config/defconfig 是否有 CONFIG_SPL=y，或者编译输出目录有无 u-boot-spl。
-查阅官方 BSP 用户手册，查看推荐的启动分段方案。
-    
-Q2：什么情况下可以把 SPL 去掉，只用 U-Boot？
-硬件初始化极其简单，BootROM 能直接装载主 U-Boot 并执行（如 NOR Flash 映射）。
-平台定制需求低，工程团队能确认无后遗症。
-    
-Q3：SPL 和 U-Boot 如何协作传递信息？
+Q1：SPL 和 U-Boot 如何协作传递信息？
 SPL 可通过 RAM、寄存器、中转地址等方式，传递板级信息、环境参数、校验结果。
 SPL 失败可直接回退或报错重启，利于早期调试。
     
-Q4：如果引导流程挂死，如何排查是 SPL 还是 U-Boot 的问题？
+Q2：如果引导流程挂死，如何排查是 SPL 还是 U-Boot 的问题？
 观察串口输出：SPL 阶段 log 是否输出，若 SPL 输出正常则重点排查 U-Boot；否则需定位 SPL 问题。
 可以定制 SPL 提示灯/蜂鸣器等硬件动作，辅助区分。
 ```
@@ -171,7 +159,7 @@ Q4：如果引导流程挂死，如何排查是 SPL 还是 U-Boot 的问题？
 
 ## 1.整体流程概述
 
-此流程板卡（boards）预设的启动流程（intended start-up flow”，即硬件板卡正常启动时应遵循的标准步骤。该启动流程对两类程序均适用 ——**SPL（Secondary Program Loader，二级程序加载器）** 和 **U-Boot proper（标准 U-Boot 程序）**，且二者需遵循相同规则（follow the same rules）。
+此流程板卡预设的启动流程，即硬件板卡正常启动时应遵循的标准步骤。该启动流程对两类程序均适用 ——**SPL（Secondary Program Loader，二级程序加载器）** 和 **U-Boot proper（标准 U-Boot 程序）**，且二者需遵循相同规则。
 
 ```c
 //U-Boot（包括 SPL 和主 U-Boot）的板级初始化遵循统一规则，核心流程为：
@@ -437,6 +425,39 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
    #example
    CROSS_COMPILE ?= arm-none-linux-gnueabi-
    ```
+
+3. **menuconfig 微调配置**（现代用法，U-Boot 与内核通用）
+
+   > 现代 U-Boot / 内核统一用 Kconfig 机制：`make xxx_defconfig` 先加载默认配置，`make menuconfig` 再微调。上文 `make <board_name>_config` 是旧版 U-Boot 用法。
+
+   ```shell
+   make xxx_defconfig   # 1)先加载厂商默认配置
+   make menuconfig      # 2)再在默认配置基础上微调
+   ```
+
+   `menuconfig` 里有成千上万个选项，不需要全懂，按下面方法选即可：
+
+   - **从 defconfig 出发**
+     厂商 defconfig 已把能用的都开了，只加自己缺的，不动已有的。
+   - **看 help**
+     光标停在选项上按 `?` 或 `h`，弹出说明。重点看**符号名**（如 `CONFIG_SCSI`），不是上面的描述文字。
+   - **逆向定位**
+     知道自己缺啥，用 grep 搜符号，别在菜单里瞎逛。
+     ```shell
+     grep -i "xxx" configs/xxx_defconfig
+     grep -ri "描述词" drivers/ Kconfig
+     ```
+   - **三态符号**
+     | 符号       | 含义                                  |
+     | ---------- | ------------------------------------- |
+     | `[*]` / `y` | 编译进 u-boot / 内核镜像               |
+     | `[M]` / `m` | 编成 `.ko` 模块，运行时可加载（内核） |
+     | `[ ]`      | 不选                                  |
+     不确定就选 `M`：错了能卸载，不影响启动；`y` 错了得重编。
+   - **依赖项自动**
+     menuconfig 里灰的、选不了的 = 依赖没满足。先开它 `depends on` 的那些项，会自动亮。
+   - **实在不知道就别动**
+     默认配置 = 能用。新手 90% 场景是 defconfig + 加一两个自己模块的驱动。
 
 ## 2.U-Boot编译
 
@@ -833,6 +854,88 @@ SD卡的存储以**扇区为单位**，每个扇区的大小为**512Byte**。其
 4. emmc close 0，关闭EMMC引导分区
 
 ## 3.RK3506刷机加载
+
+# TEE 可信执行环境
+
+## 1.基本概念
+
+TEE（Trusted Execution Environment，可信执行环境）是 CPU 内部一块与普通系统隔离的安全运行环境，由 ARM 的 **TrustZone** 技术实现。TrustZone 把 CPU 切分成两个相互隔离的世界：
+
+- **Normal World（普通世界）**
+  跑 Linux、U-Boot 等普通系统，看不到安全世界的数据。
+- **Secure World（安全世界）**
+  跑 TEE OS，一个隔离的安全小系统。
+
+TEE 里跑的是敏感业务：DRM 密钥、指纹识别、支付、密钥存储、安全启动校验等。Linux 想用这些功能时，通过 `SMC`（Secure Monitor Call）指令请求服务，只能拿到结果，拿不到底层敏感数据。
+
+## 2.TEE定位
+
+以瑞芯微（Rockchip）为例，完整启动链：
+
+```txt
+BootROM → TPL/SPL(idbloader.img) → U-Boot → trust.img → Linux Kernel
+```
+
+`trust.img` 是 **BL31 + OP-TEE** 打包而成：
+
+| 组成 | 说明 |
+| ---- | ---- |
+| **BL31**（ATF，ARM Trusted Firmware） | 跑在 EL3 最高特权级，做安全初始化，管理两个世界的切换 |
+| **OP-TEE** | TEE OS 本体，跑在 Secure World（S-EL1），给 Linux 提供安全服务 |
+
+## 3.TEE作用
+
+ARM Cortex-A 系列按异常级别逐级启动：**EL3 → EL2 → EL1**，权限逐级下降：
+
+1. BootROM / SPL 运行在 EL3，权限最高。
+2. 要跳转到 Linux（EL1）之前，必须先布置好安全世界（EL3 / S-EL1）。
+3. BL31 负责从 EL3 下放权限、建立 Secure World、装载好 TEE OS，最后才跳转到 Linux。
+
+所以没有 BL31 / trust.img，ARM 芯片（尤其 Rockchip、全志、i.MX8 这类）起不来 Linux。
+
+# EL 与 BL 
+
+## 1.硬件特权级别
+
+EL = **Exception Level**（异常级别）。CPU 上电启动或遇异常/中断时，会在不同特权层切换，这些层就叫异常级别。ARM64 分 4 层，数字越大权限越高：
+
+```txt
+EL0  应用程序层   ← Linux 用户程序跑这
+EL1  内核层       ← Linux 内核跑这
+EL2  Hypervisor   ← 虚拟机管理层，没虚拟化就跳过
+EL3  最高层       ← 安全监控，ATF/BL31 跑这，管 Secure/Normal 切换
+```
+
+启动顺序：**EL3（上电）→ 往下掉到 EL1 → EL0**。每层能管下面，下面碰不到上面。再加两个维度：
+
+- Secure World 里 EL1 = **S-EL1**，跑 TEE OS（OP-TEE）。
+- Normal World 里 EL1 = **NS-EL1**，跑 Linux。
+
+## 2.ATF 固件代号
+
+ARM Trusted Firmware（ATF）把启动分成几个阶段，按 **BL（Boot Loader）+ 数字**命名：
+
+```txt
+BL1  第一阶段引导    最底层，上电先跑，极简
+BL2  第二阶段引导    加载后面的镜像
+BL31  EL3 运行时固件 Secure Monitor，常驻 EL3，管世界切换
+BL32  Secure World 固件 = TEE OS（OP-TEE）
+BL33  Normal World 固件 = U-Boot / EDK2
+```
+
+| ATF 代号 | 对应 Rockchip |
+| -------- | -------------------- |
+| BL1      | BootROM（芯片内置）  |
+| BL2      | TPL/SPL（idbloader.img） |
+| BL31     | ATF，在 trust.img 里 |
+| BL32     | OP-TEE（TEE OS），也在 trust.img 里 |
+| BL33     | U-Boot               |
+
+## 3.启动流程
+
+![image-20260907164154928](..\figure\image-20260907164154928.png)
+
+![image-20260907164537123](..\figure\image-20260907164537123.png)
 
 # U-Boot命令行
 
