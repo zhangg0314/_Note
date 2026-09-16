@@ -245,6 +245,64 @@ Q2：如果引导流程挂死，如何排查是 SPL 还是 U-Boot 的问题？
 |  **资源限制**  |               体积小，依赖 SRAM 运行，功能精简               |  功能丰富，依赖 SDRAM 运行，可使用全局变量   |
 |   **重定位**   |              栈和 `global_data` 可迁移到 SDRAM               |           整个镜像重定位到内存顶部           |
 
+# DDR初始化流程
+
+## 1.初始化时机
+
+DDR 尚未完成初始化时，CPU 没有可用的主存，只能运行在 SoC 内部容量有限的一小块 SRAM（OCRAM / iRAM）中。因此 DDR 的初始化必须发生在 SPL 阶段（在 `board_init_f()` 之前完成），由 SPL 完成 DDR 初始化后，再将完整版 U-Boot 加载到 DDR 中运行，最后跳转过去。
+
+## 2.总体流程
+
+从 DDR 控制器视角看，初始化可分为四个阶段：**时钟与控制器配置 → PHY 与 DRAM 上电 → 校准（训练）→ 验证与收尾**。
+
+### 1.时钟与控制器配置
+
+1. 配置 DDR PLL，产生 DRAM 工作时钟。
+2. 复位 DDR 控制器与 PHY。
+3. 配置控制器寄存器，包括：
+   - 数据位宽、rank 数、bank 数、行 / 列地址数；
+   - 时序参数（tRCD、tRP、tRAS、tRFC 等）；
+   - 刷新周期。
+
+### 2.PHY 与 DRAM 上电
+
+1. 初始化 PHY（IO pad、阻抗、ZQ 引脚等）。
+2. 按 JEDEC 规定执行 DRAM 上电序列：
+   - DDR3：无复位引脚，拉低 CKE → 等待时钟稳定（约 500µs）→ 拉高 CKE；
+   - DDR4 / DDR5：拉低 RESET_n → 上电稳定 → 拉高 RESET_n → 等待。
+3. 执行 Precharge All（所有 bank 预充电）。
+4. 写 MRS（Mode Register Set）模式寄存器，配置 CAS latency、burst length、DLL 复位等。
+
+### 3.校准（训练）
+
+1. ZQ 校准（ZQCL）。
+2. 训练（Training）：
+   - write leveling（写调平，DDR3 及以后）；
+   - read DQS gate training（读 DQS 门控训练）；
+   - 每字节 lane 的 read data eye 校准；
+   - CA 训练（DDR4 / DDR5）。
+
+> 训练的必要性：各颗颗粒、各根 DQ / DQS 信号到控制器的走线长度不同，存在相位差。低频下尚可容忍，高频下必须通过训练测出各 lane 的延时，将相位对齐，否则读写会出错。
+
+### 4.验证与收尾
+
+1. 内存测试（读写回读验证，或运行一段 memory test）。
+2. 得出容量，写入 `gd->ram_size` / bd。
+3. 重定位（relocate）U-Boot 到 DDR，之后全程在 DDR 中运行。
+
+## 3.训练方式
+
+| 方式         | 训练主体                                                         | 适用场景                             |
+| ------------ | ---------------------------------------------------------------- | ------------------------------------ |
+| 软件训练     | U-Boot SPL 内运行校准代码                                        | 早期 SoC（i.MX6/7、AM335x、早期全志） |
+| DDR 固件训练 | 离线工具生成训练固件，SPL 加载固件，由固件完成 PHY 训练后返回寄存器值 | 现代 SoC（i.MX8/9、瑞芯微 RK35xx）   |
+
+在 DDR 固件训练方式中，U-Boot 不再手写训练逻辑，只负责加载 DDR Firmware；训练参数由 DDR 工具离线计算后固化成表，U-Boot 仅做回放。这是当前趋势——高频 DDR 的训练逻辑复杂且厂商保密，通常打包成固件交给 Bootloader 调用。
+
+## 4.与启动阶段的对应关系
+
+DDR 初始化发生在 SPL 阶段，对应 ATF 体系的 BL2，详见下文“EL 与 BL”一节。
+
 # U-Boot源码结构
 
 ## 1.源码下载
@@ -937,7 +995,22 @@ BL33  Normal World 固件 = U-Boot / EDK2
 | BL32     | OP-TEE（TEE OS），也在 trust.img 里 |
 | BL33     | U-Boot               |
 
-## 3.启动流程
+## 3.SPL 与 BLx 的关系
+
+SPL 与 BLx 分属两套命名体系，描述的是同一启动过程：
+
+- **SPL / TPL** 是 U-Boot 项目的术语（Secondary / Tiny Program Loader）；
+- **BLx** 是 ARM ATF（Trusted Firmware-A）及部分厂商（如三星 Exynos）的术语（Boot Loader + 阶段编号）。
+
+角色大致对应：**SPL ≈ BL2**（都负责 DDR 初始化与镜像加载），**BL1 ≈ BootROM**（芯片固化代码）。以 i.MX8 为例：
+
+```txt
+BootROM(BL1) → SPL(BL2) → ATF BL31 → OP-TEE BL32 → U-Boot(BL33) → Linux
+```
+
+但需注意，不同厂商对 BL1 / BL2 的分工并不统一：三星 Exynos 的 BL0 为 iROM（BootROM），BL1、BL2 分两段，到 BL2 才做 DDR 初始化；部分平台因 SRAM 过小，采用 TPL → SPL → U-Boot 三段式。因此“SPL 就是 BL2”对多数 ARM 平台成立，但遇到具体 SoC 应先确认其 BL1 / BL2 各自负责到哪一步。
+
+## 4.启动流程
 
 ![image-20260907164154928](..\figure\image-20260907164154928.png)
 
