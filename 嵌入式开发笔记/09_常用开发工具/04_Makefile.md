@@ -294,22 +294,21 @@ lowlevel_init.o : lowlevel_init.S
 4. ifndef   endif
 
 
-# 	常用标准函数
+# 	Makefile函数
 
-## 1.标准格式
+## 1.函数格式
 
 ```makefile
 $(<函数名> <参数1,参数2>)
+
 ${<函数名> <参数1,参数2>}
 ```
 
-## 2.字符串与路径解析
+## 2.路径解析
 
-一个文件名正常应该是带绝对路径的文件名，缺省绝对路径只有文件名的化默认都是当前目录下的文件。当文件名（无论有路径）赋值给变量时，其特性就不是文件了，就是一个字符串，赋值的时候缺省路径那么该字符串就没有路径，变量就是变量，别指望变量会记住"这是个文件、它在哪个目录"，**规则里的是文件，变量里的是字符串；裸文件名 = 默认当前目录，这个默认值在赋值时不会自动补进字符串里**
+一个文件名正常应该是带绝对路径的文件名，如果缺省绝对路径只有文件名的话，就默认都是当前目录下的文件。当文件名（无论有路径）赋值给变量时，其特性就不是文件了，就是一个字符串，赋值的时候缺省路径那么该字符串就没有路径，变量就是变量。
 
-### 1.核心语义
-
-GNU Make 的一条核心语义：**Makefile 里的"文件名"只是字符串，路径解析发生在"使用"时而不是"赋值"时。**
+GNU Make 的一条核心语义：**Makefile 里的文件名只是字符串，路径解析发生在使用时而不是赋值时。**
 
 |        时机        |                          发生了什么                          |
 | :----------------: | :----------------------------------------------------------: |
@@ -323,36 +322,33 @@ main: $(SRCS)
 	gcc $(SRCS) -o main   # 这里才真的在当前目录找 main.c
 ```
 
-### 2.实际指导意义
-
 1. **路径安全**
    想让路径可靠，显式加工：`$(CURDIR)/...`、`$(abspath ...)`、`$(realpath ...)`，或写成 `src/main.c` 这类相对路径，而不是裸文件名。
-2. **不要假设**
+2. **不能假设**
    `OBJS = main.o foo.o` 只是名字，最终在哪生成/查找取决于规则目标和 make 的运行目录。
-3. **一句话总结**：**规则里的是文件，变量里的是字符串；裸文件名 = 默认当前目录，这个默认值在赋值时不会自动补进字符串里。**
+3. **总结**
+   规则里的是文件，变量里的是字符串；裸文件名 = 默认当前目录，这个默认值在赋值时不会自动补进字符串里。
 
 ---
 
-## 3.常用函数大全
+## 3.常用函数
 
 ### 1.字符串处理类
 
-|           函数            |                  作用                  |                     示例                     |
-| :-----------------------: | :------------------------------------: | :------------------------------------------: |
-|  `$(subst from,to,text)`  |   把 text 中所有 `from` 替换为 `to`    |      `$(subst .c,.o,main.c)` → `main.o`      |
-|  `$(patsubst p,r,text)`   |         按模式替换（`%` 通配）         |   `$(patsubst %.c,%.o,main.c)` → `main.o`    |
-|      `$(strip str)`       |        去首尾空白并压缩连续空格        |        `$(strip "  a   b ")` → `a b`         |
-|  `$(findstring find,in)`  | 在 in 里找 find，找到返回 find，否则空 |         `$(findstring a,abc)` → `a`          |
-|   `$(filter p...,text)`   |           保留匹配模式的单词           |   `$(filter %.c,main.c main.o)` → `main.c`   |
-| `$(filter-out p...,text)` |           去掉匹配模式的单词           | `$(filter-out %.o,main.c main.o)` → `main.c` |
-|      `$(sort list)`       |           按字典序排序并去重           |         `$(sort b a c a)` → `a b c`          |
-|     `$(word n,text)`      |       取第 n 个单词（从 1 开始）       |           `$(word 2,a b c)` → `b`            |
-|  `$(wordlist s,e,text)`   |          取第 s 到第 e 个单词          |      `$(wordlist 2,3,a b c d)` → `b c`       |
-|      `$(words text)`      |              统计单词个数              |            `$(words a b c)` → `3`            |
-|    `$(firstword text)`    |              取第一个单词              |          `$(firstword a b c)` → `a`          |
-|    `$(lastword text)`     |             取最后一个单词             |          `$(lastword a b c)` → `c`           |
-
-**快捷写法**：`$(var:%.c=%.o)` ≡ `$(patsubst %.c,%.o,$(var))`；`$(var:.c=.o)` ≡ `$(subst .c,.o,$(var))`。最常用：
+|           函数            |                  作用                  |                     示例                     | 快件写法         |
+| :-----------------------: | :------------------------------------: | :------------------------------------------: | ---------------- |
+|  `$(subst from,to,text)`  |   把 text 中所有 `from` 替换为 `to`    |      `$(subst .c,.o,main.c)` → `main.o`      | `$(var:.c=.o)`   |
+|  `$(patsubst p,r,text)`   |         按模式替换（`%` 通配）         |   `$(patsubst %.c,%.o,main.c)` → `main.o`    | `$(var:%.c=%.o)` |
+|      `$(strip str)`       |        去首尾空白并压缩连续空格        |        `$(strip "  a   b ")` → `a b`         |                  |
+|  `$(findstring find,in)`  | 在 in 里找 find，找到返回 find，否则空 |         `$(findstring a,abc)` → `a`          |                  |
+|   `$(filter p...,text)`   |           保留匹配模式的单词           |   `$(filter %.c,main.c main.o)` → `main.c`   |                  |
+| `$(filter-out p...,text)` |           去掉匹配模式的单词           | `$(filter-out %.o,main.c main.o)` → `main.c` |                  |
+|      `$(sort list)`       |           按字典序排序并去重           |         `$(sort b a c a)` → `a b c`          |                  |
+|     `$(word n,text)`      |       取第 n 个单词（从 1 开始）       |           `$(word 2,a b c)` → `b`            |                  |
+|  `$(wordlist s,e,text)`   |          取第 s 到第 e 个单词          |      `$(wordlist 2,3,a b c d)` → `b c`       |                  |
+|      `$(words text)`      |              统计单词个数              |            `$(words a b c)` → `3`            |                  |
+|    `$(firstword text)`    |              取第一个单词              |          `$(firstword a b c)` → `a`          |                  |
+|    `$(lastword text)`     |             取最后一个单词             |          `$(lastword a b c)` → `c`           |                  |
 
 ```makefile
 OBJS = $(SRCS:.c=.o)        # 或 $(SRCS:%.c=%.o)

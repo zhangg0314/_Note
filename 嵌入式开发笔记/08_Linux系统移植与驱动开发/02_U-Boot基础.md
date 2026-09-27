@@ -6,42 +6,55 @@ Bootloader是在操作系统运行之前运行的一小段代码，用于将软�
 
 # 基本功能
 
-- 初始化软硬件环境，如时钟、内存、串口、存储、网络等。
-- 提供调试与维护功能：如环境变量配置、固件升级、网络引导、烧写命令等。
+- 初始化软硬件环境，如时钟、内存（SRAM）、串口、存储、网络等。
+- 提供调试与维护功能
+  如环境变量配置、固件升级、网络引导、烧写命令等。
 - 引导加载Linux内核，通常是 Linux 内核，并传递启动参数、设备树等必要信息。
 - 给Linux内核传参
 - 执行用户命令（如U-Boot命令）
 
-------
-
-# U-Boot启动阶段
+# U-Boot初始化流程
 
 首先对开发板上的软硬件环境做进一步初始化，然后将Linux内核、设备树(dtb)、根文件系统(rootfs)从外部存储器（或网络）搬移到内存，然后跳转到linux运行。Linux开始运行后先对系统环境做初始化，当系统启动完成后，Linux再从内存中（或网络）挂载根文件系统。
 
 ## 1.第一阶段
 
-初始化时钟，关闭看门狗，关中断，关闭MMU，TLB，DCACHE，ICACHE等初始化SDRAM，初始化NAND FLASH等。
+初始化时钟，关闭看门狗，关中断，关闭MMU，TLB，DCACHE，ICACHE等，并初始化SDRAM，初始化NAND FLASH等。
 
 [u-boot分析（五）----I/D cache失效|关闭MMU和cache|关闭看门狗 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4222669.html)
 
 ```txt
-首先，我们为何要关闭mmu？mmu负责从虚拟地址到物理地址之间的转换，
-但是我们现在的汇编都是直接操作物理寄存器， 此时如果打开了mmu，而我们并没有有效的TLB，这样cpu可以说是胡乱运行的，
-所以我们需要关闭mmu，不需要它转换地址，直接操作寄存器方便快捷。 
-然后，再发出灵魂拷问，为何要关闭cache？因为cache和MMU是通过cp15管理的，刚上电的时候，CPU并不能管理他们。
-所以上电的时候mmu必须关闭，指令cache可关闭，可不关闭，但数据cache一定要关闭， 否则可能导致刚开始的代码里面，
-去取数据的时候，从cache里面取，而这时候RAM中数据还没有cache过来，导致数据预取异常。
+抄回（clean）+ 擦干净（invalidate），文档里统称失效；
+必须先抄回 + 擦干净，再撤走。所以说在关闭cache之前cache里面可能已经有数据了，为了不影响我们的代码，所以要先让其失效，在进行关闭。
+```
+
+```txt
+首先，我们为何要关闭mmu？
+mmu负责从虚拟地址到物理地址之间的转换，但是我们现在的汇编都是直接操作物理寄存器， 此时如果打开了mmu，而我们并没有有效的TLB，这样cpu可以说是胡乱运行的，所以我们需要关闭mmu，不需要它转换地址，直接操作寄存器方便快捷。 
+
+然后，再发出灵魂拷问，为何要关闭cache？
+因为cache和MMU是通过cp15管理的，刚上电的时候，CPU并不能管理他们。所以上电的时候mmu必须关闭，指令cache可关闭，可不关闭，但数据cache一定要关闭，否则可能导致刚开始的代码里面，去取数据的时候，从cache里面取，而这时候RAM中数据还没有cache过来，导致数据预取异常。
 ```
 
 ## 2.第二阶段
 
-<<<<<<< HEAD
-初始化一个串口，检测系统内存映射，将内核映像和根文件系统映像从Flash上读到DRAM空间中，为内核**设置启动参数**，调用内核。这种分层设计既保证了对不同硬件的兼容性（通过板级函数定制），又维持了 U-Boot 核心逻辑的统一性（通用代码路径），同时 SPL 与主 U-Boot 共享同一套规则，简化了跨阶段开发。
-=======
 初始化一个串口，检测系统内存映射，将内核映像和根文件系统映像从Flash上读到DRAM空间中，为内核**设置启动参数**，调用内核。这种分层设计既保证了对不同硬件的兼容性（通过板级函数定制），又维持了 U-Boot 核心逻辑的统一性（通用代码路径），对于带SPL启动流程的， SPL 与主 U-Boot 也共享同一套规则，这种设计简化了跨阶段开发。
->>>>>>> 0e89d2aba14678246119f362a29722a6b655bcb9
 
-# U-Boot初始化流程
+## 3.具体分析
+
+[u-boot剖析（一）----Makefile分析 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4206975.html)
+[u-boot分析（二）----工作流程分析 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4215627.html)
+[u-boot分析（三）---boot命令实现以及内核的启动 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4217171.html)
+[u-boot分析（四）---设置异常向量表|设置SVC模式 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4219919.html)
+[u-boot分析（五）----I/D cache失效|关闭MMU和cache|关闭看门狗 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4222669.html)
+[u-boot分析（六）----时钟初始化 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4227435.html)
+[u-boot分析（七）----内存初始化 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4234451.html)
+[u-boot分析（八）----串口初始化 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4237498.html)
+[u-boot分析（九）----nand flash初始化|nand flash读写分析 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4240326.html)
+[u-boot分析（十）----堆栈设置|代码拷贝|完成BL1阶段 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4242731.html)
+[u-boot分析（十一）----MMU简单分析|u-boot分析大结局|学习规划 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4246634.html)
+
+# U-Boot多阶段初始化
 
 ## 1.总体启动流程
 在嵌入式 Linux  系统开发、BSP 适配及新平台 bring-up 过程中，Bootloader 的启动流程往往决定了整个系统移植和硬件支持的复杂度。U-Boot 作为当前主流的开源 Bootloader，其启动流程又分为带 SPL（Secondary Program Loader）与不带 SPL两种模式。不同方案在硬件要求、启动机制、代码结构、调试思路等方面存在明显区别。以 ARM Cortex-A SoC（如 NXP i.MX6/8, Allwinner, Rockchip , STM32MP1 等）为例，完整启动链路如下
