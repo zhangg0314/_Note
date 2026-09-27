@@ -23,7 +23,7 @@ find [搜索路径] [选项] [正则表达式]
 		-exec…… {}\  #进一步处理搜索结果
 #组合条件:查找当前目录及其子目录下所有属于用户 username 或大小大于 1MB 的文件
 find . -type f \( -user username -o -size +1M \)
-
+find . -type f  -user username -o -size +1M
 
 #全盘搜索系统中所有后缀为.mp4的文件，并删除所有查找到的文件
 find / -name "*.mp4" -exec rm -rf {} \;
@@ -169,6 +169,30 @@ JOB=`sed -n '/processor/p' /proc/cpuinfo | wc -l`
 #	P(大写)	#只打印模式空间的第一行
 #例：文件content两行foo/bar，sed -n 'N;p' 把两行拼一起打印
 ```
+
+## 5.查找文件内容
+
+### 1.grep
+
+[Linux grep 命令 | 菜鸟教程](https://www.runoob.com/linux/linux-comm-grep.html)
+
+Linux grep (global regular expression) 命令用于查找文件里符合条件的字符串或正则表达式。grep 指令用于查找内容包含指定的范本样式的文件，如果发现某文件的内容符合所指定的范本样式，预设 grep 指令会把含有范本样式的**那一行**显示出来。若不指定任何文件名称，或是所给予的文件名为 **-**，则 grep 指令会从**标准输入**设备读取数据。
+
+```sh
+grep [options] pattern [files]
+#pattern - 表示要查找的字符串或正则表达式。
+#files - 表示要查找的文件名，可以同时查找多个文件，如果省略 files 参数，则默认从标准输入中读取数据。
+grep [-abcEFGhHilLnqrsvVwxy][-A<显示行数>][-B<显示列数>][-C<显示列数>][-d<进行动作>][-e<范本样式>][-f<范本文件>][--help][范本样式][文件或目录...]
+```
+
+#### 常用选项
+
+- `-i`：忽略大小写进行匹配。
+- `-v`：反向查找，只打印不匹配的行。
+- `-n`：显示匹配行的行号。
+- `-r`：递归查找子目录中的文件。
+- `-l`：只打印匹配的文件名。
+- `-c`：只打印匹配的行数。
 
 # 系统管理
 
