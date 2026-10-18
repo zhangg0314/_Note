@@ -1,321 +1,3 @@
-# 引导程序
-
-Bootloader是在操作系统运行之前运行的一小段代码，用于将软硬件环境初始化到一个合适的状态，比如初始化时钟，中断，`DRAM`控制器等外设，为操作系统的加载和运行做准备（其本身不是操作系统），再把Linux从Flash拷贝到`DRAM`中，最后再启动Linux内核。Bootloader是启动引导程序的统称，类似于操作系统与Linux的概念，嵌入式Linux常用的Bootloader是U-Boot。
-
-------
-
-# 基本功能
-
-- 初始化软硬件环境，如时钟、内存（SRAM）、串口、存储、网络等。
-- 提供调试与维护功能
-  如环境变量配置、固件升级、网络引导、烧写命令等。
-- 引导加载Linux内核，通常是 Linux 内核，并传递启动参数、设备树等必要信息。
-- 给Linux内核传参
-- 执行用户命令（如U-Boot命令）
-
-# U-Boot初始化流程
-
-首先对开发板上的软硬件环境做进一步初始化，然后将Linux内核、设备树(dtb)、根文件系统(rootfs)从外部存储器（或网络）搬移到内存，然后跳转到linux运行。Linux开始运行后先对系统环境做初始化，当系统启动完成后，Linux再从内存中（或网络）挂载根文件系统。
-
-## 1.第一阶段
-
-初始化时钟，关闭看门狗，关中断，关闭MMU，TLB，DCACHE，ICACHE等，并初始化SDRAM，初始化NAND FLASH等。
-
-[u-boot分析（五）----I/D cache失效|关闭MMU和cache|关闭看门狗 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4222669.html)
-
-```txt
-抄回（clean）+ 擦干净（invalidate），文档里统称失效；
-必须先抄回 + 擦干净，再撤走。所以说在关闭cache之前cache里面可能已经有数据了，为了不影响我们的代码，所以要先让其失效，在进行关闭。
-```
-
-```txt
-首先，我们为何要关闭mmu？
-mmu负责从虚拟地址到物理地址之间的转换，但是我们现在的汇编都是直接操作物理寄存器， 此时如果打开了mmu，而我们并没有有效的TLB，这样cpu可以说是胡乱运行的，所以我们需要关闭mmu，不需要它转换地址，直接操作寄存器方便快捷。 
-
-然后，再发出灵魂拷问，为何要关闭cache？
-因为cache和MMU是通过cp15管理的，刚上电的时候，CPU并不能管理他们。所以上电的时候mmu必须关闭，指令cache可关闭，可不关闭，但数据cache一定要关闭，否则可能导致刚开始的代码里面，去取数据的时候，从cache里面取，而这时候RAM中数据还没有cache过来，导致数据预取异常。
-```
-
-## 2.第二阶段
-
-初始化一个串口，检测系统内存映射，将内核映像和根文件系统映像从Flash上读到DRAM空间中，为内核**设置启动参数**，调用内核。这种分层设计既保证了对不同硬件的兼容性（通过板级函数定制），又维持了 U-Boot 核心逻辑的统一性（通用代码路径），对于带SPL启动流程的， SPL 与主 U-Boot 也共享同一套规则，这种设计简化了跨阶段开发。
-
-## 3.具体分析
-
-[u-boot剖析（一）----Makefile分析 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4206975.html)
-[u-boot分析（二）----工作流程分析 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4215627.html)
-[u-boot分析（三）---boot命令实现以及内核的启动 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4217171.html)
-[u-boot分析（四）---设置异常向量表|设置SVC模式 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4219919.html)
-[u-boot分析（五）----I/D cache失效|关闭MMU和cache|关闭看门狗 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4222669.html)
-[u-boot分析（六）----时钟初始化 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4227435.html)
-[u-boot分析（七）----内存初始化 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4234451.html)
-[u-boot分析（八）----串口初始化 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4237498.html)
-[u-boot分析（九）----nand flash初始化|nand flash读写分析 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4240326.html)
-[u-boot分析（十）----堆栈设置|代码拷贝|完成BL1阶段 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4242731.html)
-[u-boot分析（十一）----MMU简单分析|u-boot分析大结局|学习规划 - wrjvszq - 博客园](https://www.cnblogs.com/wrjvszq/p/4246634.html)
-
-# U-Boot多阶段初始化
-
-## 1.总体启动流程
-在嵌入式 Linux  系统开发、BSP 适配及新平台 bring-up 过程中，Bootloader 的启动流程往往决定了整个系统移植和硬件支持的复杂度。U-Boot 作为当前主流的开源 Bootloader，其启动流程又分为带 SPL（Secondary Program Loader）与不带 SPL两种模式。不同方案在硬件要求、启动机制、代码结构、调试思路等方面存在明显区别。以 ARM Cortex-A SoC（如 NXP i.MX6/8, Allwinner, Rockchip , STM32MP1 等）为例，完整启动链路如下
-
-## 2.有 SPL 的启动流程
-
-```txt
-BootROM (SoC内部固件) → SPL (精简U-Boot) → U-Boot (完整版) → Linux Kernel → RootFS → User Application
-```
-
-## 3.无 SPL 的启动流程
-
-```shell
-BootROM (SoC内部固件) → U-Boot (完整版) → Linux Kernel → RootFS → User Application
-```
-
-## 4.BootROM 与 SPL 
-
-- **BootROM**
-  不可更改，由芯片原厂烧录在 SoC 内部，只负责最基础的硬件初始化和从外部介质加载 bootloader 到 SRAM/DRAM 并运行”。
-- **SPL**
-  U-Boot 的精简版，用于解决内部SRAM容量有限，无法一次加载完整版 U-Boot时的硬件初始化需求（如 DDR、时钟、简单外设）。
-- **完整版 U-Boot**
-  具备命令行、丰富外设/协议栈支持，可做升级、调试、启动内核等。
-
-## 5.有无SPL的差异
-
-### 1.有SPL
-
-SOC 上电后，可用的 SRAM 极其有限，无法直接放下大体积的 U-Boot。因此，必须先用极小的 SPL 初始化 DDR，之后将完整版 U-Boot 从外部介质加载到 DDR，再切换 到 U-Boot 运行。因为典型 Cortex-A9/A53/A72 SoC，SRAM 只有 32KB/64KB/128KB，而完整版 U-Boot 动辄数百 KB 甚至上 MB。同时需要复杂 的DRAM 初始化脚本，BootROM 能力有限。
-
-### 2.无 SPL 
-
-SOC 内部 SRAM 或 BootROM 能直接完成 DDR 初始化。BootROM 能直接从存储加载大容量 U-Boot 到 DDR 并运行。U-Boot 镜像尺寸可以接受（如 NOR flash 启动、小型芯片/简单板卡）。早期的 ARM9、ARM11、部分 Cortex-M4/M7，以及 MCU 级应用，内存需求不高。使用 NOR Flash，直接映射到地址空间，无需分段加载。BootROM 足够灵活/支持的 SoC（如部分 Allwinner、Rockchip、早期NXP平台等）。
-
-## 6.启动流程对比
-
-### 1.有 SPL 启动流程详解
-
-1. **BootROM 执行**
-   SOC 上电后，BootROM 按固定顺序检测外部存储（SD/eMMC/NAND/NOR/USB等），找到并加载 SPL 到 SRAM。
-2. **SPL 阶段**
-   初始化必要硬件（主要是时钟/DDR）。极简驱动，仅包含板级初始化和加载U-Boot代码的功能。加载完整 U-Boot 镜像到 DDR。跳转至 U-Boot：SPL 跳转到 DDR 内的 U-Boot 入口，后者接管控制权。
-
-   ```c
-   void board_init_f(ulong dummy)
-   {
-       // 最小化硬件初始化
-       arch_cpu_init();
-       spl_init();
-       dram_init();
-       // 读取并加载主 U-Boot
-       spl_load_image();
-       jump_to_uboot();
-   }
-   ```
-   
-3. **U-Boot 主阶段**
-   初始化更丰富的外设。提供 CLI/网络/升级/调试等功能。加载和启动 Linux 内核。操作系统启动。
-
-```Kconfig
-#（典型 Kconfig/defconfig）
-CONFIG_SPL=y
-CONFIG_SPL_FRAMEWORK=y
-CONFIG_SPL_SERIAL_SUPPORT=y
-CONFIG_SPL_DRIVERS_MISC_SUPPORT=y
-```
-
-### 2.无SPL 启动流程详解
-
-1. **BootROM 执行**
-   SOC 上电后，BootROM 直接从外部存储加载完整 U-Boot 镜像到内存（一般是 DDR）并执行。
-2. **U-Boot 阶段**
-   U-Boot 自行初始化全部硬件（包含 DDR）。后续流程同上：提供 CLI、升级、内核引导等功能。
-   
-   ```c
-   void board_init_f(ulong dummy)
-   {
-       // 直接初始化所有硬件
-       arch_cpu_init();
-       dram_init();
-       peripheral_init();
-       // 进入命令行或直接启动内核
-       main_loop();
-   }
-   ```
-3. **操作系统启动**
-
-## 7.开发实践总结
-
-### 1.需要 SPL判断
-
-检查 SoC 文档BootROM 支持的最大加载大小、上电后可用的 SRAM/DRAM 初始化流程。**若 U-Boot 体积超过 BootROM 一次性可加载容量**，必须引入 SPL。若平台/芯片厂商提供的参考 U-Boot 都有 SPL 分段，说明其硬件需要这种启动分阶段。
-
-### 2.编译与适配流程
-
-有 SPL编译时会生成 u-boot-spl/u-boot-spl.bin，同时 u-boot/u-boot.bin/elf，烧录脚本须注意 SPL 与主镜像分区、拼接位置等。无 SPL只有主镜像直接烧录，启动配置/烧写脚本更简单。
-
-### 3.调试和移植
-
-- 有 SPL 时遇到 DDR 问题，建议优先只修改/调试 SPL，主 U-Boot 尽量保持稳定。
-- 无 SPL 时，所有初始化和调试均集中于 U-Boot 代码，调试窗口更大但也更易出错。
-
-```c
-Q1：SPL 和 U-Boot 如何协作传递信息？
-SPL 可通过 RAM、寄存器、中转地址等方式，传递板级信息、环境参数、校验结果。
-SPL 失败可直接回退或报错重启，利于早期调试。
-    
-Q2：如果引导流程挂死，如何排查是 SPL 还是 U-Boot 的问题？
-观察串口输出：SPL 阶段 log 是否输出，若 SPL 输出正常则重点排查 U-Boot；否则需定位 SPL 问题。
-可以定制 SPL 提示灯/蜂鸣器等硬件动作，辅助区分。
-```
-
-# 板级初始化流程
-
-> [!NOTE]
->
-> 参考U-Boot源码根目录下的**README**。
-
-## 1.整体流程概述
-
-此流程板卡预设的启动流程，即硬件板卡正常启动时应遵循的标准步骤。该启动流程对两类程序均适用 ——**SPL（Secondary Program Loader，二级程序加载器）** 和 **U-Boot proper（标准 U-Boot 程序）**，且二者需遵循相同规则。
-
-```c
-//U-Boot（包括 SPL 和主 U-Boot）的板级初始化遵循统一规则，核心流程为：
-架构相关的start.S → lowlevel_init() → board_init_f() → （BSS 清除 + U-Boot镜像重定位） → board_init_r() → main_loop()
-
-//main_loop：uboot-主循环
-//起点：从架构 / CPU 专属的start.S开始（如 ARMv7 的 `arch/arm/cpu/armv7/start.S`），这是汇编级别的启动入口。
-//核心目标：逐步搭建硬件环境（从最基础的执行条件到完整的内存 / 外设可用），最终进入 U-Boot 主循环处理命令和启动系统。
-```
-
-## 2.BSS清除与重定位
-
-在 `board_init_f()` 完成后、`board_init_r()` 执行前，会**自动**进行两项关键操作：
-
-- **BSS 清除**
-  清空未初始化的全局变量区域（确保全局变量初始值为 0）。
-- **重定位**
-  - **SPL**
-    若定义 `CONFIG_SPL_STACK_R`，栈和 `global_data` 会被迁移到 `CONFIG_SPL_STACK_R_ADDR` 下方。
-  - **主 U-Boot**
-    整个 U-Boot 镜像被重定位到内存顶部。
-
-## 3.三大核心函数
-
-### 1.lowlevel_init()
-
-1. **核心作用**
-   是启动过程中最早期的初始化函数，仅完成最基础的设置，确保程序能正常执行到`board_init_f()`函数。
-2. **限制条件**
-   - 不依赖`global_data`（全局数据结构）和 BSS 段（未初始化数据区）
-   - 基本没有栈（ARMv7 架构可能有临时栈，但很快会被移除）
-   - 禁止初始化 SDRAM（内存）和使用控制台输出
-   - 只做让程序能继续执行到`board_init_f()`的最低限度工作
-3. **使用场景**
-   几乎不需要自定义实现这个函数，通常使用默认实现
-4. **执行要求**
-   需要正常返回，不能在此处终止执行流程。
-
-### 2.board_init_f()
-
-1. **核心作用**
-   为`board_init_r()`函数的运行做准备，重点初始化 SDRAM（同步动态随机存储器）和串行 UART（通用异步收发传输器），使硬件达到可运行后续初始化程序的状态。
-2. **运行环境**
-   - 可以访问`global_data`（全局数据结构GD，通常通过一个宏定义如 `DECLARE_GLOBAL_DATA_PTR`访问，本质上是一个指向 SRAM 中特定位置的指针，而不属于传统意义上的全局变量）
-   - 栈（stack）位于 SRAM（静态随机存储器）中
-   - BSS 段（未初始化的全局变量区域）不可用，因此不能使用全局变量或静态变量，只能使用栈变量和`global_data`
-3. **无SPL 相关说明**
-   - 会调用`dram_init()`来初始化 DRAM（动态随机存储器）
-   - 若在 SPL（Secondary Program Loader，次级程序加载器）中已完成 DRAM 初始化，此函数可什么都不做
-4. **SPL 相关说明**
-   - 可根据需要用自定义版本覆盖整个`board_init_f()`函数
-   - 在极端情况下可在此处调用`preloader_console_init()`
-   - 需完成 SDRAM 初始化以及 UART 工作所需的所有设置
-   - 无需清理 BSS 段，这部分工作会由`crt0.S`完成
-   - 必须正常返回，不能直接调用`board_init_r()`
-
-### 3.board_init_r()
-
-- **主要作用**
-  承担 U-Boot 启动阶段的主要执行逻辑，包含通用初始化代码，最终会跳转到 `main_loop()` 进入命令行交互阶段。
-- **运行环境**
-  - 可访问 `global_data` 全局数据结构
-  - SDRAM 已初始化可用
-  - BSS 段已准备好，所有静态 / 全局变量可正常使用
-- **非 SPL 场景特性**
-      U-Boot 已重定位到SDRAM内存顶部，并从该位置运行。
-- **SPL场景特性**：
-  - 若定义了 `CONFIG_SPL_STACK_R` 且 `CONFIG_SPL_STACK_R_ADDR` 指向 SDRAM，栈可位于 SDRAM 中
-  - 可在此处调用 `preloader_console_init()`（通常通过开启 `CONFIG_SPL_BOARD_INIT` 并实现 `spl_board_init()` 函数来完成）
-  - 负责加载 U-Boot 主程序，或在 falcon 模式下直接加载 Linux 内核
-
-## 4.SPL与U-Boot 差异
-
-|      维度      |                             SPL                              |                  主 U-Boot                   |
-| :------------: | :----------------------------------------------------------: | :------------------------------------------: |
-| **初始化流程** | 遵循相同的三阶段函数（`lowlevel_init` → `board_init_f` → `board_init_r`） |                     同上                     |
-|  **代码路径**  |              通常有独立代码路径（`spl/` 目录）               |     主代码路径（`common/`、`board/` 等）     |
-|  **核心目标**  |       快速初始化 SDRAM 和串口，加载主 U-Boot 或 Linux        | 完成完整初始化，提供命令行交互，启动操作系统 |
-|  **资源限制**  |               体积小，依赖 SRAM 运行，功能精简               |  功能丰富，依赖 SDRAM 运行，可使用全局变量   |
-|   **重定位**   |              栈和 `global_data` 可迁移到 SDRAM               |           整个镜像重定位到内存顶部           |
-
-# DDR初始化流程
-
-## 1.初始化时机
-
-DDR 尚未完成初始化时，CPU 没有可用的主存，只能运行在 SoC 内部容量有限的一小块 SRAM（OCRAM / iRAM）中。因此 DDR 的初始化必须发生在 SPL 阶段（在 `board_init_f()` 之前完成），由 SPL 完成 DDR 初始化后，再将完整版 U-Boot 加载到 DDR 中运行，最后跳转过去。
-
-## 2.总体流程
-
-从 DDR 控制器视角看，初始化可分为四个阶段：**时钟与控制器配置 → PHY 与 DRAM 上电 → 校准（训练）→ 验证与收尾**。
-
-### 1.时钟与控制器配置
-
-1. 配置 DDR PLL，产生 DRAM 工作时钟。
-2. 复位 DDR 控制器与 PHY。
-3. 配置控制器寄存器，包括：
-   - 数据位宽、rank 数、bank 数、行 / 列地址数；
-   - 时序参数（tRCD、tRP、tRAS、tRFC 等）；
-   - 刷新周期。
-
-### 2.PHY 与 DRAM 上电
-
-1. 初始化 PHY（IO pad、阻抗、ZQ 引脚等）。
-2. 按 JEDEC 规定执行 DRAM 上电序列：
-   - DDR3：无复位引脚，拉低 CKE → 等待时钟稳定（约 500µs）→ 拉高 CKE；
-   - DDR4 / DDR5：拉低 RESET_n → 上电稳定 → 拉高 RESET_n → 等待。
-3. 执行 Precharge All（所有 bank 预充电）。
-4. 写 MRS（Mode Register Set）模式寄存器，配置 CAS latency、burst length、DLL 复位等。
-
-### 3.校准（训练）
-
-1. ZQ 校准（ZQCL）。
-2. 训练（Training）：
-   - write leveling（写调平，DDR3 及以后）；
-   - read DQS gate training（读 DQS 门控训练）；
-   - 每字节 lane 的 read data eye 校准；
-   - CA 训练（DDR4 / DDR5）。
-
-> 训练的必要性：各颗颗粒、各根 DQ / DQS 信号到控制器的走线长度不同，存在相位差。低频下尚可容忍，高频下必须通过训练测出各 lane 的延时，将相位对齐，否则读写会出错。
-
-### 4.验证与收尾
-
-1. 内存测试（读写回读验证，或运行一段 memory test）。
-2. 得出容量，写入 `gd->ram_size` / bd。
-3. 重定位（relocate）U-Boot 到 DDR，之后全程在 DDR 中运行。
-
-## 3.训练方式
-
-| 方式         | 训练主体                                                         | 适用场景                             |
-| ------------ | ---------------------------------------------------------------- | ------------------------------------ |
-| 软件训练     | U-Boot SPL 内运行校准代码                                        | 早期 SoC（i.MX6/7、AM335x、早期全志） |
-| DDR 固件训练 | 离线工具生成训练固件，SPL 加载固件，由固件完成 PHY 训练后返回寄存器值 | 现代 SoC（i.MX8/9、瑞芯微 RK35xx）   |
-
-在 DDR 固件训练方式中，U-Boot 不再手写训练逻辑，只负责加载 DDR Firmware；训练参数由 DDR 工具离线计算后固化成表，U-Boot 仅做回放。这是当前趋势——高频 DDR 的训练逻辑复杂且厂商保密，通常打包成固件交给 Bootloader 调用。
-
-## 4.与启动阶段的对应关系
-
-DDR 初始化发生在 SPL 阶段，对应 ATF 体系的 BL2，详见下文“EL 与 BL”一节。
-
 # U-Boot源码结构
 
 ## 1.源码下载
@@ -489,7 +171,7 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
    #example
    make origen_config
    ```
-   
+
 2. **指定编译uboot源码使用的编译器**
 
    ```shell
@@ -514,25 +196,91 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
 
    - **从 defconfig 出发**
      厂商 defconfig 已把能用的都开了，只加自己缺的，不动已有的。
+
    - **看 help**
      光标停在选项上按 `?` 或 `h`，弹出说明。重点看**符号名**（如 `CONFIG_SCSI`），不是上面的描述文字。
+
    - **逆向定位**
      知道自己缺啥，用 grep 搜符号，别在菜单里瞎逛。
+
      ```shell
      grep -i "xxx" configs/xxx_defconfig
      grep -ri "描述词" drivers/ Kconfig
      ```
+
    - **三态符号**
-     | 符号       | 含义                                  |
-     | ---------- | ------------------------------------- |
-     | `[*]` / `y` | 编译进 u-boot / 内核镜像               |
-     | `[M]` / `m` | 编成 `.ko` 模块，运行时可加载（内核） |
-     | `[ ]`      | 不选                                  |
-     不确定就选 `M`：错了能卸载，不影响启动；`y` 错了得重编。
+
+     | 符号                                                     | 含义                                  |
+     | -------------------------------------------------------- | ------------------------------------- |
+     | `[*]` / `y`                                              | 编译进 u-boot / 内核镜像              |
+     | `[M]` / `m`                                              | 编成 `.ko` 模块，运行时可加载（内核） |
+     | `[ ]`                                                    | 不选                                  |
+     | 不确定就选 `M`：错了能卸载，不影响启动；`y` 错了得重编。 |                                       |
+
    - **依赖项自动**
      menuconfig 里灰的、选不了的 = 依赖没满足。先开它 `depends on` 的那些项，会自动亮。
+
    - **实在不知道就别动**
      默认配置 = 能用。新手 90% 场景是 defconfig + 加一两个自己模块的驱动。
+
+### 旧版 `make xxx_config` 的内部机制
+
+> 仅适用于 v2014.10 之前的旧版 U-Boot。新版改用 Kconfig，执行 `make xxx_defconfig`，此机制已废弃。
+
+旧版顶层 `Makefile` 中，每块板对应一条如下规则：
+
+```make
+smdk2440_config : unconfig
+	@$(MKCONFIG) $(@:_config=) arm s3c24xx smdk2440 samsung s3c2440
+```
+
+**`$(@:_config=)` 是 GNU Make 的替换引用（substitution reference）。**
+
+语法：
+
+```make
+$(var:from=to)
+```
+
+将变量 `var` 中**每个单词**内的 `from` 替换为 `to`；省略 `to` 时表示删除。
+
+逐项说明：
+
+- `$@` 为目标名，即 `smdk2440_config`
+- `$(@:_config=)` 对 `$@` 执行替换，将 `_config` 替换为空
+- 替换结果为 `smdk2440`
+- 行首的 `@` 仅为前缀，表示**不回显该条命令**，不影响参数
+
+展开后实际执行：
+
+```shell
+mkconfig smdk2440 arm s3c24xx smdk2440 samsung s3c2440
+```
+
+**mkconfig 的参数约定**（旧版 U-Boot 固定顺序）：
+
+| 位置 | 值       | 含义       |
+| ---- | -------- | ---------- |
+| $1   | smdk2440 | board name |
+| $2   | arm      | arch       |
+| $3   | s3c24xx  | cpu        |
+| $4   | smdk2440 | board      |
+| $5   | samsung  | vendor     |
+| $6   | s3c2440  | soc        |
+
+mkconfig 依据这些参数生成 `include/config.h`、`include/config.mk`，以及 `asm` 等软链接。
+
+**替换引用的通用用法：**
+
+```make
+FILES = a.c b.c
+$(FILES:.c=.o)      # a.o b.o
+$(FILES:.c=)        # a b      删除后缀
+```
+
+`$(@:_config=)` 即属上述删后缀用法：由目标名 `xxx_config` 反推出 board 名。
+
+**`unconfig` 依赖的作用：** `unconfig` 无对应文件，因此**每次均会执行**，作用是先清除上一次的配置产物（`include/config.h`、`config.mk` 等），确保本次为全新配置。
 
 ## 2.U-Boot编译
 
@@ -567,7 +315,17 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
    ```txt
    直接将origen目录复制一份改目录名为fs4412，修改目录中的.c和.h的文件名，因为修改了文件名，所以对应的Makefile内容也要修改，然后再修改.h头文件中的内容中打印开发板名字的宏定义。最后再在boards.cfg中添加fs4412的相关信息。
    ```
-   
+
+   > [!NOTE]
+   >
+   > `boards.cfg` 是 **v2014.10 之前**的做法，该文件已在新版 U-Boot 中被删除。新版改为：
+   >
+   > - 在 `arch/<arch>/Kconfig` 和 `board/<vendor>/<board>/Kconfig` 里描述这块板
+   > - 在 `configs/<board>_defconfig` 里给出默认配置
+   > - 在 `board/<vendor>/<board>/MAINTAINERS` 里登记维护者（原本写在 boards.cfg 里的状态信息）
+   >
+   > 另注意新版驱动必须走 **Driver Model**（`U_BOOT_DRIVER()` + uclass），不能再直调旧式函数。详见 02 文件“新旧 U-Boot 的分界线”一节。
+
 2. **添加三星加密引导方式**（因芯片而异，不需要掌握）
 
    考虑芯片启动的安全性，Exynos4412需要三星提供的初始引导加密后我们的u-boot才能被引导运行，所以我们需要在uboot源码中添加三星提供的加密处理代码。添加完后，又因为添加的加密文件也要编译，所以对应的Makefile也要修改。
@@ -581,7 +339,7 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
    ```shell
    vi arch/arm/cpu/armv7/start.S
    ```
-   
+
     在第134行后添加如下代码（即点亮LED2），然后保存退出
 
    ```asm
@@ -595,7 +353,7 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
    
    str r1, [r0]
    ```
-   
+
 4. **添加编译脚本**
 
    使用make命令编译时只链接uboot源码中的相关代码，而我们添加的初始引导加密的代码不会被连接到u-boot.bin中，所以这里我们自己编写编译脚本build.sh，这个脚本中除了对uboot源码进行配置和编译外还将初始引导加密代码链接到了u-boot.bin上，最终生成一个完成的uboot镜像u-boot-fs4412.bin。
@@ -639,7 +397,7 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
    2)进入include/configs目录，复制一份origen.h头文件并重命名为fs4412.h，并修改.h头文件里面内容，把origen改为fs4412
    3)在顶层目录的board.cfg文件中添加手里开发板的信息，包括cpu架构和类型等信息。
    ```
-   
+
 6. **修改顶层目录的makefile，自带交叉编译工具信息**
 
    ```shell
@@ -663,7 +421,7 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
    bl1+bl2+all00_padding.bin+uboot--->u.bin
    size(bl1)+size(bl2)+size(all0_padding) + size(uboot) = Booting area
    ```
-   
+
 9. **修改.C，以及start.S文件等进行创新配置**：以此匹配我们的开发板
 
 10. **利用编译脚本配置并编译文件**
@@ -700,7 +458,7 @@ Glue字面意思是胶水，负责把 应用和Core API粘起来，让两者能�
    	str r1, [r0]
    #endif
    ```
-   
+
 3. 初始化UART传输波特率的时钟频率，虽然源文件有串口初始化，但不初始化时钟频率，UART还是不能正常工作，进对硬件时钟源进行两级分频得到100Mhz。
 
    ```asm
@@ -955,10 +713,10 @@ BootROM → TPL/SPL(idbloader.img) → U-Boot → trust.img → Linux Kernel
 
 `trust.img` 是 **BL31 + OP-TEE** 打包而成：
 
-| 组成 | 说明 |
-| ---- | ---- |
-| **BL31**（ATF，ARM Trusted Firmware） | 跑在 EL3 最高特权级，做安全初始化，管理两个世界的切换 |
-| **OP-TEE** | TEE OS 本体，跑在 Secure World（S-EL1），给 Linux 提供安全服务 |
+| 组成                                  | 说明                                                         |
+| ------------------------------------- | ------------------------------------------------------------ |
+| **BL31**（ATF，ARM Trusted Firmware） | 跑在 EL3 最高特权级，做安全初始化，管理两个世界的切换        |
+| **OP-TEE**                            | TEE OS 本体，跑在 Secure World（S-EL1），给 Linux 提供安全服务 |
 
 ## 3.TEE作用
 
@@ -969,44 +727,6 @@ ARM Cortex-A 系列按异常级别逐级启动：**EL3 → EL2 → EL1**，权�
 3. BL31 负责从 EL3 下放权限、建立 Secure World、装载好 TEE OS，最后才跳转到 Linux。
 
 所以没有 BL31 / trust.img，ARM 芯片（尤其 Rockchip、全志、i.MX8 这类）起不来 Linux。
-
-# EL 与 BL 
-
-## 1.硬件特权级别
-
-EL = **Exception Level**（异常级别）。CPU 上电启动或遇异常/中断时，会在不同特权层切换，这些层就叫异常级别。ARM64 分 4 层，数字越大权限越高：
-
-```txt
-EL0  应用程序层   ← Linux 用户程序跑这
-EL1  内核层       ← Linux 内核跑这
-EL2  Hypervisor   ← 虚拟机管理层，没虚拟化就跳过
-EL3  最高层       ← 安全监控，ATF/BL31 跑这，管 Secure/Normal 切换
-```
-
-启动顺序：**EL3（上电）→ 往下掉到 EL1 → EL0**。每层能管下面，下面碰不到上面。再加两个维度：
-
-- Secure World 里 EL1 = **S-EL1**，跑 TEE OS（OP-TEE）。
-- Normal World 里 EL1 = **NS-EL1**，跑 Linux。
-
-## 2.ATF 固件代号
-
-ARM Trusted Firmware（ATF）把启动分成几个阶段，按 **BL（Boot Loader）+ 数字**命名：
-
-```txt
-BL1  第一阶段引导    最底层，上电先跑，极简
-BL2  第二阶段引导    加载后面的镜像
-BL31  EL3 运行时固件 Secure Monitor，常驻 EL3，管世界切换
-BL32  Secure World 固件 = TEE OS（OP-TEE）
-BL33  Normal World 固件 = U-Boot / EDK2
-```
-
-| ATF 代号 | 对应 Rockchip |
-| -------- | -------------------- |
-| BL1      | BootROM（芯片内置）  |
-| BL2      | TPL/SPL（idbloader.img） |
-| BL31     | ATF，在 trust.img 里 |
-| BL32     | OP-TEE（TEE OS），也在 trust.img 里 |
-| BL33     | U-Boot               |
 
 ## 3.SPL 与 BLx 的关系
 
@@ -1025,9 +745,7 @@ BootROM(BL1) → SPL(BL2) → ATF BL31 → OP-TEE BL32 → U-Boot(BL33) → Linu
 
 ## 4.启动流程
 
-![image-20260907164154928](..\figure\image-20260907164154928.png)
-
-![image-20260907164537123](..\figure\image-20260907164537123.png)
+![image-20260907164154928](D:\_Note\嵌入式开发笔记\figure\image-20260907164154928.png)
 
 # U-Boot命令行
 
