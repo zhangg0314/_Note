@@ -67,13 +67,23 @@ git config --global user.name "username1"
 git config --global user.email "xxx@163.com"
 
 #查看配置信息
-
 git config --list
 #正常显示中文文件名
 git config --global core.quotepath false
 #修改配置信息
 git config --global --replace-all user.name "username2"
 git config --global --replace-all user.email "xxx@qq.com"
+
+
+#查 Git 当前的代理配置
+git config --global --get http.proxy
+git config --global --get https.proxy
+# 如果代理软件提供 HTTP 代理（端口以你实际为准，常见 7890）
+git config --global http.proxy http://127.0.0.1:7890
+git config --global https.proxy http://127.0.0.1:7890
+# 如果代理软件提供 SOCKS5 代理
+git config --global http.proxy socks5://127.0.0.1:7890
+git config --global https.proxy socks5://127.0.0.1:7890
 ```
 
 ## 3.查看库状态
