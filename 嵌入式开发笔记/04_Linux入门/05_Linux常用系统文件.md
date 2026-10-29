@@ -564,34 +564,30 @@ systemd 用 target 取代 runlevel，保留映射：
 | 5 | `graphical.target` |
 | 6 | `reboot.target` |
 
-systemd 启动时，`systemd-sysv-generator` 扫描 `/etc/init.d/` 与 `/etc/rcN.d/`，将 SysV 脚本自动转换为 `.service` 单元（标记 `generated`），并依据 `S` 软链接决定是否开机自启。因此系统虽已迁移至 systemd，`/etc/init.d/` 与 `/etc/rcN.d/` 仍作为兼容层保留。
+systemd 启动时，`systemd-sysv-generator` 扫描 `/etc/init.d/` 与 `/etc/rcN.d/`，将 SysV 脚本自动转换为 `.service` 单元（标记 `generated`，通常放在 `/run/systemd/generator.late/` 下），并依据 `S` 软链接决定是否开机自启。因此系统虽已迁移至 systemd，`/etc/init.d/` 与 `/etc/rcN.d/` 仍作为兼容层保留。
 
-## 3.systemd
+## 3.Systemd
 
-[System has not been booted with systemd as init system (PID 1)：系统未使用 systemd 引导的完美解决方法-腾讯云开发者社区-腾讯云](https://cloud.tencent.com.cn/developer/article/2469325?policyId=1004#1)
-
-## 1.`systemd`服务
+### 1.`systemd`服务
 
 `systemd`是 Linux 系统中广泛使用的系统和服务管理器，它取代了传统的`SysV`，负责系统启动、服务管理、进程监控等核心功能。其设计目标是提高系统启动速度、优化服务依赖管理，并提供更丰富的系统管理能力。适合长期稳定运行的命令，通过系统服务管理器 `systemd` 管理，支持开机自启、日志保存、状态监控等。
 
-###### 1.2 为什么 systemd 更常见？
+### 2.核心功能与特点
 
-systemd 之所以被广泛使用，是因为它带来了更多的系统管理功能，支持并行服务启动、按需加载服务、日志管理等。这让 systemd 成为现代 Linux 发行版的首选。然而，某些环境（如 Docker 容器、WSL）默认并不使用 systemd，导致运行 `systemctl` 时出现上述错误。
-
-## 2.核心功能与特点
+systemd 之所以被广泛使用，是因为它带来了更多的系统管理功能，支持并行服务启动、按需加载服务、日志管理等。这让 systemd 成为现代 Linux 发行版的首选。
 
 1. **并行启动服务**
    传统 `SysVinit` 按顺序启动服务，而` systemd` 能并行启动无依赖关系的服务，大幅缩短系统启动时间。
 2. **统一的服务管理接口**
    通过 `systemctl` 命令统一管理系统服务（启动、停止、重启、查看状态等），替代了传统的 `/etc/init.d/` 脚本。
 3. **基于单元（Unit）的管理**
-   `systemd` 用 “单元” 描述系统资源，包括服务（.service）、挂载点（.mount）、设备（.device）等，每种单元有特定的配置文件（通常位于 `/usr/lib/systemd/system/` 或 `/etc/systemd/system/`）。
+   `systemd` 用单元描述系统资源，包括服务（.service）、挂载点（.mount）、设备（.device）等，每种单元有特定的配置文件（通常位于 `/usr/lib/systemd/system/` 或 `/etc/systemd/system/`）。
 4. **自动重启与监控**
    可配置服务崩溃时自动重启，通过 `systemctl status` 实时查看服务状态和日志。
 5. **依赖管理**
    单元配置中可明确依赖关系（如 `After=network.target` 表示服务在网络启动后运行），<u>避免手动处理启动顺序</u>。
 
-## 3.常用`systemctl`命令
+### 3.常用`systemctl`命令
 
 | 命令                                       | 功能描述                                            |
 | ------------------------------------------ | --------------------------------------------------- |
@@ -602,20 +598,22 @@ systemd 之所以被广泛使用，是因为它带来了更多的系统管理功
 | `systemctl disable <服务名>`               | 取消服务开机自启动                                  |
 | `systemctl status <服务名>`                | 查看服务状态（运行 / 停止等）                       |
 | `systemctl list-unit-files --type=service` | 列出所有服务及自启动状态                            |
-| `systemctl daemon-reload**`**              | **重新加载 `systemd` 配置（修改服务文件后需执行）** |
+| `systemctl daemon-reload**`                | **重新加载 `systemd` 配置（修改服务文件后需执行）** |
 
-## 4.服务配置文件
+### 4.`.service`文件
 
-在 Linux 系统中，`.server` 文件通常用于定义 **`systemd` 服务单元**，是管理系统服务（如后台进程、守护程序）的配置文件。
+在 Linux 系统中，`.service` 文件通常用于定义 **`systemd` 服务单元**，是管理系统服务（如后台进程、守护程序）的配置文件。
 
-### 1.文件存储路径
+#### 1.文件存储路径
 
-文件名通常为 `服务名.service`（例如 `nginx.service`、`myapp.service`），存放路径一般为：
+文件名通常为`服务名.service`（例如 `nginx.service`、`myapp.service`），存放路径一般为：
 
-- 系统级服务：`/usr/lib/systemd/system/` 或 `/etc/systemd/system/`
-- 用户级服务：`~/.config/systemd/user/`
+- 系统级服务
+  `/usr/lib/systemd/system/` 或 `/etc/systemd/system/`
+- 用户级服务
+  `~/.config/systemd/user/`
 
-### 2.基本结构
+#### 2.基本结构
 
 ```ini
 [Unit]          # 服务的元数据（描述、依赖关系等）
@@ -630,7 +628,7 @@ systemd 之所以被广泛使用，是因为它带来了更多的系统管理功
 Description=My Application Service  # 服务描述
 After=network.target                # 依赖网络服务启动后运行
 
-[Service]# 服务的核心配置（启动命令、运行方式等
+[Service]# 服务的核心配置（启动命令、运行方式等）
 Type=simple                         # 服务类型（simple/forking等）
 ExecStart=/usr/bin/myapp            # 启动命令
 Restart=on-failure                  # 失败时自动重启
@@ -642,16 +640,81 @@ WantedBy=multi-user.target          # 开机自启动时的目标级别
 
 将文件放入 `/etc/systemd/system/` 后，执行 `systemctl daemon-reload` 即可通过 `systemctl` 管理该服务。
 
-### 3.模板单元与实例化（`@` 与 `%i`）
+### 5.`.target`文件
+
+ `.target`可以理解成启动名单，举个例子的目录来说：
+
+```shell
+multi-user.target.wants/
+├── cron.service
+├── networking.service
+├── ssh.services
+└── irq-affinity.service
+#当 systemd 启动multi-user.target时，也去启动 cron、网络、SSH、irq-affinity 这些服务。
+```
+
+`.target` 自己不运行一个业务程序，它主要负责把一组服务组织起来。
+
+```shell
+[Install]
+WantedBy=getty.target
+
+#启用我时，请把我加入getty.target的启动名单
+```
+
+### 6.`.wants`文件
+
+```shell
+systemctl enable app-start.service
+#通常就会建立：
+getty.target.wants/
+└── app-start.service → /etc/systemd/system/app-start.service
+```
+
+以后 `getty.target` 启动时，就会顺带拉起 `app-start.service`，然后再执行应用启动脚本。可以把 `.wants` 目录理解成这份名单里有哪些成员。
+
+### 7.对比总结
+
+- **`.service`**
+  具体干活的
+- **`.target`**
+  把一组服务集合起来
+- **`.target.wants/`**
+  列出这个集合要拉起哪些服务
+
+| 名称                       | 通俗理解           |
+| -------------------------- | ------------------ |
+| `multi-user.target`        | 这份启动名单的名字 |
+| `multi-user.target.wants/` | 存放名单成员的目录 |
+| 目录里的 `.service` 链接   | 具体要启动哪些服务 |
+
+### 8.模板单元与实例化
 
 文件名含 `@` 的服务为**模板单元**，如 `usb-mount@.service`、`autovt@.service`。模板本身不直接运行，而是按需实例化出具体实例，如 `usb-mount@sda1.service`。
 
-- `%i`：实例名，即 `@` 与 `.service` 之间的部分（如 `sda1`），可在模板内部引用。
-- 同一模板可并行启动多个实例（如同时插入多个 U 盘，对应 `usb-mount@sda1`、`usb-mount@sdb1`）。
+模板单元就是带一个参数空位的服务配置；实例化，就是给这个空位填一个具体值，让 systemd 按这个值管理一个具体服务。`@` 后面留空，表示模板：
 
-实例化来源通常为 `udev` 热拔插事件（详见「设备管理（udev）」章节），`udev` 规则中的 `%k` 传入后作为 `%i` 使用。
+```shell
+usb-mount@.service
+          ↑
+       这里还没填值
+```
 
-示意（实际配置依设备而定）：
+给它填上不同的值，就得到不同实例：
+
+```
+usb-mount@sda1.service
+usb-mount@sdb1.service
+```
+
+其中，`sda1`、`sdb1` 叫实例名，配置文件中的 `%i` 就代表这个值。
+
+- `%i`
+  实例名，即 `@` 与 `.service` 之间的部分（如 `sda1`），可在模板内部引用。
+- 同一模板可并行启动多个实例
+  如同时插入多个 U 盘，对应 `usb-mount@sda1`、`usb-mount@sdb1`。
+
+实例化来源通常为 `udev` 热拔插事件（详见「设备管理（udev）」章节），`udev` 规则中的 `%k` 传入后作为 `%i` 使用。示意（实际配置依设备而定）：
 
 ```ini
 # /etc/systemd/system/usb-mount@.service
@@ -662,14 +725,6 @@ ExecStop=/bin/umount /mnt/usbflash
 ```
 
 `ExecStart` 中的 `/dev/%i` 展开为 `/dev/sda1`，作为脚本的 `$1` 参数传入，完成从 `udev` 到脚本的参数传递。
-
-## 5.日志管理
-
-使用 `journalctl` 查看系统日志：
-
-```bash
-journalctl -u xxx.service -f#动态打印日志
-```
 
 ## 6.服务状态
 
@@ -777,6 +832,346 @@ sudo systemctl start tshark-capture.service
 # 查看服务状态（确认是否运行中）
 sudo systemctl status tshark-capture.service
 ```
+
+[System has not been booted with systemd as init system (PID 1)：系统未使用 systemd 引导的完美解决方法-腾讯云开发者社区-腾讯云](https://cloud.tencent.com.cn/developer/article/2469325?policyId=1004#1)
+
+# 日志管理
+
+## 1.journalctl命令
+
+使用 `journalctl` 查看系统日志：
+
+```bash
+journalctl -u xxx.service -f#动态打印日志
+
+-b                  #只看本次开机，自本次开机以来，这个服务的全部日志
+-u app-start.service #只看这个服务
+-t #按日志标识筛选
+-u #则按服务单元筛选
+--no-pager           #直接输出，不进入翻页界面
+-n 100               #只看最后100条
+-f				    #持续显示新日志，按 Ctrl+C 退出
+
+#比如只看最后 100 条
+journalctl -b -u app-start.service -n 100 --no-pager
+
+
+#需要查看上一次开机的日志
+journalctl --list-boots
+journalctl -b -1 -u app-start.service --no-pager
+
+#-b -1 表示上一次启动。
+#但前提是历史日志还在：如果journal只存放在/run/log/journal的内存文件系统中，重启后通常就没有了；
+#持久化日志一般存放在/var/log/journal，由journald的Storage=等配置控制。
+#日常调试应先确认日志保存方式，再依赖重启后排查。
+```
+
+## 2.自启动服务日志
+
+通常有两部分：
+
+```shell
+systemd 自己记录的消息
+    #例如：开始启动、启动失败、退出码
+
+服务程序输出的消息
+    #例如：脚本的 echo、程序写到终端的错误信息
+```
+
+服务的标准输出、标准错误可以交给 journal 收集。如果需要明确指定，可以在服务的 `[Service]` 中配置：
+
+```shell
+StandardOutput=journal
+StandardError=journal
+```
+
+但如果 `/usr/bin/run_applications.sh` 内部写了：
+
+```shell
+某个程序 > /dev/null 2>&1
+```
+
+这部分输出就已经被脚本丢弃了；如果重定向到某个日志文件，就要去查看那个文件。因此，**journal 中没有业务日志时，应检查启动脚本里的输出重定向和程序自身的日志配置**。
+
+## 3.应用进程日志
+
+值得注意的是journalctl会记录其他日志，不限于自启动服务。关键是：这个进程有没有把日志发送给 journal。`journalctl` 负责查询，真正接收和保存日志的是 `systemd-journald`。
+
+### 1.只往终端打印
+
+例如在 SSH 终端执行：
+
+```shell
+./my_app
+```
+
+程序使用 `printf()` 打印：
+
+```shell
+程序启动
+串口打开失败
+```
+
+这些输出默认出现在当前终端，**journald 不会自动收集所有终端上的打印**。服务之所以经常能直接查到输出，是因为 systemd 启动服务时，通常已经把服务的输出接到了 journal。
+
+### 2.手动使用系统日志
+
+即使没有 `.service` 文件，程序也可以通过 `syslog()` 或 journal 的日志接口发送日志。是否开机自启动，不是接收这些日志的前提。假设程序本来只是往终端打印，也可以这样运行：
+
+```shell
+systemd-cat -t my_app ./my_app
+
+#这会运行程序，并将它的标准输出、标准错误接到 journal，标识设为my_app。程序自己另写到文件里的内容，不属于这两个输出通道
+```
+
+再开一个终端查看：
+
+```shell
+# 查看本次开机中带 my_app 标识的日志
+journalctl -b -t my_app
+
+# 持续查看
+journalctl -b -t my_app -f
+```
+
+### 3.程序只写自己的日志文件
+
+```shell
+./my_app > /data/my_app.log 2>&1
+```
+
+这种情况下，输出写进指定文件，应通过下面的命令查看。journald 并不会默认扫描、收集任意日志文件。
+
+## 4.内核日志
+
+journal 还可以收集内核日志，所以它也不只是进程运行日志库。例如查看本次开机的内核消息：
+
+```shell
+journalctl -b -k
+```
+
+***
+
+## 5.syslog
+
+### 1.基本概念
+
+syslog就是Linux程序把日志交给系统统一处理的一种方式。在 C 程序里，可以调用 `syslog()` 发日志，而不必自己打开文件、往文件里写，和 `printf()` 对比就容易理解：
+
+```c
+printf("串口打开失败\n");
+```
+
+这句话写到**标准输出**；如果在终端直接运行程序，通常就显示在终端。
+
+```c
+syslog(LOG_ERR, "串口打开失败");
+```
+
+这句话把一条错误级别的日志发给**系统日志接收端**。它不要求程序必须由 systemd 启动。例如，一个完整的 C 程序可以这样写：
+
+```c
+#include <syslog.h>
+
+int main(void)
+{
+    openlog("my_app", LOG_PID, LOG_USER);
+
+    syslog(LOG_INFO, "程序启动");
+    syslog(LOG_ERR, "串口打开失败");
+
+    closelog();
+    return 0;
+}
+```
+
+- `my_app`
+  日志标识，方便区分哪个程序发的。
+- `LOG_PID`
+  把进程 PID 加到日志中。
+- `LOG_INFO`、`LOG_ERR`
+  分别表示普通信息和错误。
+
+### 2.作用地位
+
+它和 journal 的关系是：syslog 是发送日志的接口之一，journald可以接收这些日志，`journalctl` 则用来查看。在正常配置了对应接收入口的 systemd 系统中，可以这样理解：
+
+```c
+程序
+   │ 调用 syslog()
+   ▼
+systemd-journald 接收、保存
+   │
+   ▼
+journalctl 查看
+
+//其中journald明确支持接收syslog()发出的消息；所以手动运行的程序也能被记录,只要它调用syslog()，系统就可以接收，不需要先给它写一个.service文件。
+//具体是否还转交rsyslog、最终是否写入某个文本文件，要看设备配置，不能只凭有rsyslog.service就确定。
+```
+
+| 名称               | 是什么                                     |
+| ------------------ | ------------------------------------------ |
+| `syslog()`         | 程序发送系统日志的函数                     |
+| `systemd-journald` | 收集、保存日志的程序，也能接收 syslog 日志 |
+| `journalctl`       | 查询 journal 日志的命令                    |
+| `rsyslog`          | 另一种系统日志处理程序                     |
+
+### 3.配置文件
+
+#### 1.文件路径
+
+```shell
+/etc/systemd/journald.conf          #日志存在哪里、保存多久、最多占多少空间
+
+/etc/systemd/journald.conf.d/*.conf #配置片段目录
+```
+
+#### 2.配置字段
+
+它们配置的是收集日志的 **journald**。`journalctl` 只是查询工具，查询哪个服务、哪个时间段，通过命令参数指定。配置片段中的设置可以覆盖主配置文件。例如，日志保存配置可以写成：
+
+```
+[Journal]
+Storage=persistent
+SystemMaxUse=100M
+RuntimeMaxUse=20M
+MaxRetentionSec=7day
+```
+
+| 配置                   | 含义                                     |
+| ---------------------- | ---------------------------------------- |
+| `Storage=persistent`   | 尽量保存到磁盘，重启后还能查             |
+| `SystemMaxUse=100M`    | 磁盘 journal 的空间使用上限              |
+| `RuntimeMaxUse=20M`    | 内存 journal 的空间使用上限              |
+| `MaxRetentionSec=7day` | 日志最长保留时间；空间不足时可能更早清理 |
+
+其中，`Storage=` 的值含义如下：
+
+```shell
+volatile    #→ 存 /run/log/journal，重启后丢失
+persistent  #→ 尽量存 /var/log/journal，启动早期可暂存 /run
+auto        #→ /var/log/journal 存在则持久化，否则存内存
+none        #→ 不保存 journal 日志
+```
+
+#### 3.日志查看
+
+journal 文件要用 `journalctl` 读取，不是普通文本日志。journal 的日志通常还在下一层目录里，而且**不是普通文本 `.log` 文件**，结构类似这样：
+
+```shell
+/var/log/journal/
+└── 一串机器ID/
+    ├── system.journal
+    ├── system@……journal
+    └── user-1000.journal
+```
+
+所以`.journal` 要这样读取，而不是用 `cat` 或 `tail`：
+
+```shell
+journalctl --file=/实际路径/system.journal -n 30 --no-pager
+```
+
+```shell
+#检查当前日志占用和保存了哪些启动记录
+journalctl --disk-usage 
+journalctl --list-boots
+```
+
+## 6.rsyslog
+
+### 1.概念作用
+
+`rsyslog` 是另一套日志处理程序，可以理解成另一个专门负责接收、分类、转存日志的后台程序。它和 `journald` 的分工大致是：
+
+```shell
+程序调用 syslog()
+        │
+        ▼
+journald 或 rsyslog 接收
+        │
+        ├── journalctl 查看 journal
+        └── rsyslog 按规则写入 /var/log/*.log
+```
+
+| 名称               | 作用                             |
+| ------------------ | -------------------------------- |
+| `systemd-journald` | 收集并保存 journal 日志          |
+| `journalctl`       | 查询 journal 日志                |
+| `rsyslogd`         | 接收、过滤、转发、写入文本日志   |
+| `rsyslog.service`  | 用 systemd 启动和管理 `rsyslogd` |
+
+```shell
+#系统用syslog.service这个名字指向真正的rsyslog.service。
+syslog.service -> /lib/systemd/system/rsyslog.service
+```
+
+### 2.配置文件
+
+```shell
+cat /etc/rsyslog.conf  #主配置
+
+ls -l /etc/rsyslog.d/
+cat /etc/rsyslog.d/*.conf #附加配置
+```
+
+rsyslog 会在这些文件中定义：
+
+- 从哪里接收日志；
+- 哪些日志需要处理；
+- 按什么级别过滤；
+- 写到哪个文件；
+- 是否转发到远程服务器。
+
+### 3.转发路径
+
+Linux 程序调用 `syslog()` 时，通常把消息发送到本机的 `/dev/log` 接口。**谁接收这个接口，日志就先到谁那里。** 在设备上查看：
+
+```shell
+ls -l /dev/log
+ss -xlpn | grep -E '/dev/log|/run/systemd/journal/(dev-log|syslog)'
+```
+
+如果看到：
+
+```shell
+/dev/log -> /run/systemd/journal/dev-log
+```
+
+说明走的是 journald 的接收入口。这时还可能继续转给 rsyslog，形成下面这种关系：
+
+```shell
+程序调用 syslog()
+        ↓
+     journald
+        ├── 保存 journal
+        └── 转给 rsyslog #→ 按规则写入文本文件
+```
+
+另一种方式是 rsyslog 通过 `imjournal` 模块主动读取 journal，而不是等待 journald 转发”
+
+```shell
+syslog()
+   │
+   ├── journald 保存 #→ journalctl 能查到
+   └── rsyslog 处理  #→ /var/log/syslog 等文件能查到
+```
+
+具体走哪条路径，要看系统配置。Ubuntu/Debian 类系统常见两种方式：rsyslog 通过 `imjournal` 读取 journal，或者通过传统 syslog socket 接收日志；不同发行版配置可能不同。
+
+### 4.`rsyslog`的输入模块
+
+```shell
+grep -nE 'imuxsock|imjournal|IncludeConfig|include\(' \
+    /etc/rsyslog.conf /etc/rsyslog.d/*.conf 2>/dev/null
+```
+
+| 配置        | 表示什么                                                     |
+| ----------- | ------------------------------------------------------------ |
+| `imuxsock`  | 通过本地 Unix socket 接收日志；在 systemd 下可以接收 journald 转来的消息 |
+| `imjournal` | 直接读取 journal 中的日志                                    |
+
+****
 
 # 定时任务
 
