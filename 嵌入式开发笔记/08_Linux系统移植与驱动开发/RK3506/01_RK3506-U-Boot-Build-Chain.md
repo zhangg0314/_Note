@@ -19,9 +19,11 @@ RK3506 U-Boot 的构建分为三个阶段：
 最终产物链：
 
 ```shell
-tpl/u-boot-tpl.bin + spl/u-boot-spl.bin  →  idblock.img（引导镜像）
+(rkbin DDR bin 或 tpl/u-boot-tpl.bin) + (rkbin SPL 或 spl/u-boot-spl.bin) → idblock.bin / *_idblock*.img（取决于打包参数）
 u-boot-nodtb.bin + u-boot.dtb + tee.bin  →  uboot.img（FIT 格式，含 OP-TEE）
 ```
+
+上述是可选的打包输入，不表示编译出的 TPL/SPL 一定被使用。未指定 `--tpl` 时，前级仍取自 `rkbin` DDR bin；指定 `--tpl --spl` 才同时使用开源 TPL/SPL。当前 RK3506 开源 `sdram_init()` 是返回 `-1` 的占位实现，尚未完成 DDR 初始化。
 
 由于 `configs/rk3506_defconfig` 中 `CONFIG_ROCKCHIP_FIT_IMAGE_PACK=y`，`make.sh` 的 `PLAT_TYPE` 取值为 `FIT`，打包走 FIT 流程。
 
