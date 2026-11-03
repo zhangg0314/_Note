@@ -90,17 +90,17 @@ ARMv7 只有 EL 概念没有 EL3（沿用 old-style 特权模式），没有 ATF
 
 ### 2.ARMv8
 
- ARMv8-A 是架构名，它定义两种执行状态：
+ ARMv8-A 是架构名，它有两种执行状态：
 
   - AArch64 —— 64 位
   - AArch32 —— 32 位
 
-  同一个 ARMv8 核，可以跑 AArch64，也可以跑 AArch32（向后兼容 ARMv7 指令）。所以 ARM32 完全可以是 ARMv8——只是它跑在
+  同一个 ARMv8 核，可以跑 AArch64，也可以跑 AArch32（向后兼容 ARMv7 指令）。所以 ARM32可以是 ARMv8，只是它跑在
   AArch32 状态。
 
 |     情况     |     核     | trust镜像 |
 | :----------: | :--------: | :-------: |
-|   纯 ARMv7   | 只有 32 位 |    TOS    |
+|    ARMv7     | 只有 32 位 |    TOS    |
 | ARMv8 + 64位 |  AArch64   |    ATF    |
 | ARMv8 + 32位 |  AArch32   |    ATF    |
 
@@ -108,19 +108,17 @@ ARMv7 只有 EL 概念没有 EL3（沿用 old-style 特权模式），没有 ATF
 
 ### 3.总结对比
 
-首次两种架构的安全启动都遵循下列流程：
+首先两种架构的安全启动都遵循下列流程：
 
 ```bash
 BootROM → loader(带DDR init) → trust.img → uboot → kernel
 
-#loader 把 trust.img 搬进安全内存，再跳 U-Boot。U-Boot 要干安全相关的活（开副核、复位、进 TEE）就发 SMC指令陷进安全世界，由 trust 那块处理。
+#loader 把 trust.img 搬进安全内存，再跳 U-Boot。U-Boot 要执行安全相关的活任务（开副核、复位、进 TEE）就发 SMC指令陷进安全世界，由 trust 那块处理。
 ```
 
- 两者差别在「安全世界是谁」：
+  ARMv8：trust.img本身就是安全监控器（EL3）
 
-  ARMv8：trust.img = 安全监控器本身（EL3）
-
-  - 内容 = bl31（ATF 的 EL3 Runtime），可选再拼 bl32（OP-TEE）
+  - 内容 = bl31（ATF 的 EL3 Runtime），可选再合并 bl32（OP-TEE）
   - 跑在 EL3，就是常驻的 secure monitor
   - 职责：世界切换（secure↔non-secure，靠 SMC）、PSCI（CPU 开/关/复位/电源）都在这里、EL3 异常处理
   - OP-TEE 是独立的 bl32，跑 Secure-EL1，负责可信 OS 服务（TEE 调用）。打不打进同一个 trust.img 看配置
@@ -201,7 +199,7 @@ mmu负责从虚拟地址到物理地址之间的转换，但是我们现在的�
 
 在嵌入式 Linux  系统开发、BSP 适配及新平台 bring-up 过程中，Bootloader 的启动流程往往决定了整个系统移植和硬件支持的复杂度。U-Boot 作为当前主流的开源 Bootloader，其启动流程又分为带 SPL（Secondary Program Loader）与不带 SPL两种模式。不同方案在硬件要求、启动机制、代码结构、调试思路等方面存在明显区别。以 ARM Cortex-A SoC（如 NXP i.MX6/8, Allwinner, Rockchip , STM32MP1 等）为例，完整启动链路如下
 
-## 1.一些概念
+## 1.术语概念
 
 - **BootROM**
   不可更改，由芯片原厂烧录在 SoC 内部，只负责最基础的硬件初始化和从外部介质加载 bootloader 到 SRAM/DRAM 并运行。
@@ -226,38 +224,32 @@ BootROM (SoC内部固件) → U-Boot (完整版) → Linux Kernel → RootFS →
 SOC内部SRAM或BootROM能直接完成DDR初始化。BootROM能直接从存储加载大容量U-Boot到DDR并运行。U-Boot镜像尺寸可以接受（如NOR flash 启动、小型芯片/简单板卡）。早期的ARM9、ARM11、部分Cortex-M4/M7，以及MCU级应用，内存需求不高。使用NOR Flash，直接映射到地址空间，无需分段加载。BootROM足够灵活/支持的SoC（如部分 Allwinner、Rockchip、早期NXP平台等）。
 ```
 
-## 4.补充
+## 4.注意事项
 
-不能将无 SPL归因于SRAM 或 BootROM 能直接完成 DDR 初始化。因为**SPL 的字面含义是第二个程序（Secondary Program Loader）**，描述的是启动链中的位置（紧随 BootROM 之后的第二级），而非硬件容量。按 ATF 术语，SPL 对应 **BL2**：
+不能将无 SPL归因于SRAM 或 BootROM 能直接完成 DDR 初始化。因为SPL 的字面含义是第二个程序（Secondary Program Loader），描述的是启动链中的位置（紧随 BootROM 之后的第二级），而非硬件容量。按 ATF 术语，SPL 对应BL2，
 
 > BL2 can be implemented by ATF, or replaced by SPL.
 
-即同一位置可由不同来源填充。因此，**编译产物中有无 SPL，只说明 U-Boot 是否承担第二级加载器的角色，不能反推 SRAM 的容量。**
+即同一位置可由不同来源填充。因此，编译产物中有无 SPL，只说明 U-Boot 是否承担第二级加载器的角色，不能反推 SRAM 的容量。而DDR 初始化必须有人执行，承担者随平台而异：
 
-DDR 初始化必须有人执行，承担者随平台而异：
+| 承担者                     | 例                    |
+| -------------------------- | --------------------- |
+| BootROM 自身               | 极简单 SoC            |
+| 厂商 BL1 / BL2 私有固件    | Exynos4412            |
+| U-Boot SPL（源码树内）     | 大多数 Cortex-A 平台  |
+| ATF BL2                    | STM32MP、Rockchip 等  |
+| pre-BL1 独立 first stage   | Socionext UniPhier    |
+| DDR training firmware blob | 现代 Rockchip / i.MX8 |
 
-| 承担者                     | 例                              |
-| -------------------------- | ------------------------------- |
-| BootROM 自身               | 极简单 SoC                      |
-| 厂商 BL1 / BL2 私有固件    | **Exynos4412**                  |
-| U-Boot SPL（源码树内）     | 大多数 Cortex-A 平台            |
-| ATF BL2                    | STM32MP、Rockchip 等            |
-| pre-BL1 独立 first stage   | Socionext UniPhier              |
-| DDR training firmware blob | 现代 Rockchip / i.MX8           |
-
-**"无 SPL"应区分为三种情况：**
+无 SPL区分为三种情况
 
 | 情况             | 含义                                                | 例                          |
 | ---------------- | --------------------------------------------------- | --------------------------- |
-| A. 厂商固件代劳  | BL1 / BL2 已完成 DDR 初始化，U-Boot 占 BL33 位置    | Exynos4412                  |
-| B. BootROM 直载  | BootROM 可直接加载完整镜像，或 NOR 直接映射         | 早期 ARM9、NOR 启动、简单板卡 |
-| C. 配置未开启    | 平台支持 SPL，但 `CONFIG_SPL` 未使能                | 配置问题，非硬件问题        |
+| 厂商固件  | BL1 / BL2 已完成 DDR 初始化，U-Boot 占 BL33 位置    | Exynos4412                  |
+| BootROM 直接加载 | BootROM 可直接加载完整镜像，或 NOR 直接映射         | 早期 ARM9、NOR 启动、简单板卡 |
+| 配置未开启    | 平台支持 SPL，但 `CONFIG_SPL` 未使能                | 配置问题，非硬件问题        |
 
-**只有 B 与"SRAM 容量足够"相关。A 属分工问题，C 属配置问题。三者现象相同，成因不同。**
-
-#### 实证：Exynos4412
-
-U-Boot 官方 `doc/README.odroid` 明确说明该版本 U-Boot **不实现 SPL**，因此 BL1、BL2、TrustZone 三个二进制全部必需，缺一不可启动。启动链：
+Exynos4412的U-Boot 官方 `doc/README.odroid` 明确说明该版本 U-Boot 不实现 SPL，因此 BL1、BL2、TrustZone 三个二进制全部必需，缺一不可启动。启动链如下：
 
 ```
 iROM (BL0) → BL1 → BL2 + TrustZone → U-BOOT
@@ -265,31 +257,35 @@ iROM (BL0) → BL1 → BL2 + TrustZone → U-BOOT
 
 | 二进制      | 来源              | 职责                                  |
 | ----------- | ----------------- | ------------------------------------- |
-| `bl1.bin`   | 三星，签名且加密  | 芯片相关的早期初始化；非自由、不可再分发 |
-| `bl2.bin`   | 板厂（Hardkernel）| **初始化 SDRAM**，加载 U-Boot          |
+| `bl1.bin`   | 三星，签名且加密  | 芯片相关的早期初始化 |
+| `bl2.bin`   | 板厂 | 初始化 SDRAM，加载 U-Boot          |
 | `tzsw.bin`  | 厂商              | TrustZone 软件                        |
 
-烧录偏移（SD，block = 512 B）：BL1 @1、BL2 @31、U-Boot @63、Tzsw @2111。
+```shell
 
-即：该平台的 DDR 初始化由三星私有固件完成，U-Boot 编译时自然不需要 SPL。**这与 SRAM 容量无关。** U-Boot 在此处占用的是 **BL33（non-trusted firmware）** 位置。
+#烧录偏移（SD，block = 512 B）
+BL1 @1
+BL2 @31
+U-Boot @63
+Tzsw @2111
+#该平台的 DDR 初始化由三星私有固件完成，U-Boot 编译时就不需要 SPL，U-Boot 在此处占用的是BL33（non-trusted firmware） 位置。
+```
 
-#### 反证：Exynos850（WinLink E850-96）
-
-同族 SoC 的另一块板，U-Boot 文档给出的理由完全相同：
+同族 SoC 的另一块板，U-Boot 文档如下：
 
 > since BL2 bootloader already sets up DRAM and runs the final bootloader (U-Boot) from DRAM, there is no need in U-Boot SPL.
 
-依据是"BL2 已完成 DRAM 初始化"，而非 SRAM 容量。此外，Exynos 平台上也可改用 U-Boot 自身的 SPL 充当 BL2 位（见 `arch/arm/mach-exynos/spl_boot.c`），此时仅 BL1 必须来自厂商。**同一 SoC 家族两条路线皆可行，进一步说明有无 SPL 属方案选择，而非硬件判据。**
+就是BL2 已完成 DRAM 初始，不需要SPL来初始化。此外，Exynos 平台上也可改用 U-Boot 自身的 SPL 充当 BL2 位（见 `arch/arm/mach-exynos/spl_boot.c`），此时仅 BL1 必须来自厂商。从上面这些可以进一步说明有无 SPL 属方案选择并不一定是依赖于硬件限制。
 
-### 2.判断是否需要 SPL 的依据
+因此判断是否需要 SPL 的依据是：
 
-1. **BootROM 一次性可加载的最大尺寸**（查 SoC 手册）。完整 U-Boot 超过此值即必须增加中间一级。
-2. **上电可用 SRAM 容量**。需容纳完整 U-Boot 及其栈、`global_data`、BSS。
-3. **是否已有其他固件承担早期初始化**（厂商 BL1 / BL2 或 ATF BL2）。· 
+1. BootROM一次性可加载的最大尺寸是多大，如果完整 U-Boot 超过此值即必须增加中间一级。
+2. 上电可用 SRAM 容量又是多大，是否能容纳完整 U-Boot 及其栈、`global_data`、BSS。
+3. 是否已有其他固件承担早期初始化（厂商 BL1 / BL2 或 ATF BL2）
 
-注意第 2 条位于链条下游：SPL 自身过大时还需再增加 **TPL**，形成 BootROM → TPL → SPL → U-Boot。每一级的存在理由都是"上一级装不下下一级"。
+如果使用SPL，并且SPL 自身也过大时，还需再增加 TPL，形成 `BootROM → TPL → SPL → U-Boot`。判断依据实质就是都是上一级装不下下一级才需要再增加一级。
 
-## 4.启动对比
+## 5.启动对比
 
 ### 1.有 SPL 
 
@@ -325,7 +321,8 @@ iROM (BL0) → BL1 → BL2 + TrustZone → U-BOOT
 ### 2.无SPL 
 
 1. **BootROM 执行**
-   SOC 上电后，BootROM 直接从外部存储加载完整 U-Boot 镜像到内存（一般是 DDR）并执行。
+   SOC 上电后，BootROM直接从外部存储加载完整 U-Boot 镜像到内存（一般是 DDR）并执行。
+   
 2. **U-Boot 阶段**
    U-Boot 自行初始化全部硬件（包含 DDR）。后续流程同上：提供 CLI、升级、内核引导等功能。
    
@@ -340,17 +337,8 @@ iROM (BL0) → BL1 → BL2 + TrustZone → U-BOOT
        main_loop();
    }
    ```
-3. **操作系统启动**
 
-> [!NOTE]
->
-> 上述描述对应的是 **B 类情形**（BootROM 可直接加载完整镜像，或 NOR 直接映射），此时 U-Boot 确实自行完成 DDR 初始化。
->
-> 但"无 SPL"另有两类同样不产出 `u-boot-spl.bin` 的情形：**A 厂商固件已代劳**（BL1 / BL2 完成 DDR 初始化，U-Boot 仅占 BL33 位置，如 Exynos4412）、**C `CONFIG_SPL` 未使能**（平台支持但配置未开）。
->
-> 即：不能仅凭"编译产物中无 SPL"推断 SRAM 容量足够。详见前文「3.无 SPL › 更正与补充」。
-
-## 5.板级初始化流程
+## 6.板级初始化流程
 
 > [!NOTE]
 >
@@ -365,7 +353,7 @@ iROM (BL0) → BL1 → BL2 + TrustZone → U-BOOT
 架构相关的start.S → lowlevel_init() → board_init_f() → （BSS 清除 + U-Boot镜像重定位） → board_init_r() → main_loop()
 
 //main_loop：uboot-主循环
-//起点：从架构 / CPU 专属的start.S开始（如 ARMv7 的 `arch/arm/cpu/armv7/start.S`），这是汇编级别的启动入口。
+//起点：从架构 / CPU 专属的start.S开始（如ARMv7的arch/arm/cpu/armv7/start.S），这是汇编级别的启动入口。
 //核心目标：逐步搭建硬件环境（从最基础的执行条件到完整的内存 / 外设可用），最终进入 U-Boot 主循环处理命令和启动系统。
 ```
 
@@ -397,29 +385,25 @@ iROM (BL0) → BL1 → BL2 + TrustZone → U-BOOT
 4. **执行要求**
    需要正常返回，不能在此处终止执行流程。
 
-##### 新旧版本差异
+注意事项：
 
-旧版教程（U-Boot 1.1.6 ~ 2012.04，S3C2440 / mini2440）中，`lowlevel_init` 承担**时钟与 SDRAM 初始化**；而新版 README 规定 `must not set up SDRAM or use console`。二者并不冲突，差异源于**版本与启动框架的不同**。
+旧版教程（U-Boot 1.1.6 ~ 2012.04，S3C2440 / mini2440）中，`lowlevel_init` 承担着时钟与 SDRAM 初始化；而新版 README 规定 `must not set up SDRAM or use console`。
 
-| 维度                 | 老 U-Boot（S3C2440）      | 现代 U-Boot                              |
-| -------------------- | ------------------------- | ---------------------------------------- |
-| SPL                  | 无                        | 有，xPL 框架                             |
-| SDRAM 初始化承担者   | `lowlevel_init`           | SPL / `board_init_f()` 的 `dram_init()`  |
-| 代码运行位置         | Steppingstone 片内 4KB    | SPL 的 SRAM，随后 DDR                    |
-| `lowlevel_init` 职责 | 时钟 + SDRAM + UART/NAND  | 基本为空函数                             |
+| 维度                | 老 U-Boot                | 新U-Boot                                |
+| ------------------- | ------------------------ | --------------------------------------- |
+| SPL                 | 无                       | 有，xPL 框架                            |
+| SDRAM 初始化        | `lowlevel_init`          | SPL / `board_init_f()` 的 `dram_init()` |
+| 代码运行位置        | Steppingstone 片内 4KB   | SPL 的 SRAM，随后 DDR                   |
+| `lowlevel_init`作用 | 时钟 + SDRAM + UART/NAND | 基本为空函数                            |
 
-**老平台将该职责置于此处的原因：** 没有 SPL，代码运行于片内 4KB Steppingstone，此时**无栈、无 `global_data`、BSS 未清**，且必须重定位到 SDRAM 才能继续执行。而 `cpu_init_crit` 的注释已明确指出：**内存时序与板级相关，必须在重定位之前完成配置**。因此 SDRAM 初始化被纳入 `lowlevel_init`，属平台约束下的必然结果，而非设计选择。
-
-2012 年 MINI2440 合入主线时曾就此讨论：有意见提出将 SDRAM 初始化移至 `dram_init()` / `board_early_init_f()`，patch 作者以“重定位前必须完成时序配置、C 代码运行前必须存在栈”为由拒绝，最终维持原方案。部分 mini2440 版本改用 `CONFIG_SKIP_LOWLEVEL_INIT`（“We don't use lowlevel_init”）绕过该函数。
-
-官方对在 `lowlevel_init` 中执行 SDRAM 初始化的定性，见 commit `db910353`。
+老版本Uboot没有 SPL，代码运行于片内 4KB Steppingstone，此时无栈、无 `global_data`、BSS 未清，且必须重定位到 SDRAM 才能继续执行。而老版本的`cpu_init_crit` 的注释明确指出：内存时序与板级相关，必须在重定位之前完成配置。因此 SDRAM 初始化被纳入 `lowlevel_init`，属平台约束下的必然结果，而非设计选择。2012 年 MINI2440 合入主分支时曾就此讨论：有人提出将 SDRAM 初始化移至 `dram_init()` / `board_early_init_f()`，而patch 作者以重定位前必须完成时序配置、C 代码运行前必须存在栈为由拒绝，最终维持原方案。部分 mini2440 版本改用 `CONFIG_SKIP_LOWLEVEL_INIT`（“We don't use lowlevel_init”）绕过该函数。官方对在 `lowlevel_init` 中执行 SDRAM 初始化的定性，见 commit `db910353`。
 
 #### 2.board_init_f()
 
 1. **核心作用**
    为`board_init_r()`函数的运行做准备，重点初始化 SDRAM（同步动态随机存储器）和串行 UART（通用异步收发传输器），使硬件达到可运行后续初始化程序的状态。
 2. **运行环境**
-   - 可以访问`global_data`（全局数据结构GD，通常通过一个宏定义如 `DECLARE_GLOBAL_DATA_PTR`访问，本质上是一个指向 SRAM 中特定位置的指针，而不属于传统意义上的全局变量）
+   - 可以访问`global_data`（全局数据结构GD，通常通过一个宏定义如 `DECLARE_GLOBAL_DATA_PTR`访问，本质上是一个指向 SRAM 中特定位置的指针，而不属于传统意义上的全局变量
    - 栈（stack）位于 SRAM（静态随机存储器）中
    - BSS 段（未初始化的全局变量区域）不可用，因此不能使用全局变量或静态变量，只能使用栈变量和`global_data`
 3. **无SPL 相关说明**
@@ -442,7 +426,7 @@ iROM (BL0) → BL1 → BL2 + TrustZone → U-BOOT
   - BSS 段已准备好，所有静态 / 全局变量可正常使用
 - **非 SPL 场景特性**
       U-Boot 已重定位到SDRAM内存顶部，并从该位置运行。
-- **SPL场景特性**：
+- **SPL场景特性**
   - 若定义了 `CONFIG_SPL_STACK_R` 且 `CONFIG_SPL_STACK_R_ADDR` 指向 SDRAM，栈可位于 SDRAM 中
   - 可在此处调用 `preloader_console_init()`（通常通过开启 `CONFIG_SPL_BOARD_INIT` 并实现 `spl_board_init()` 函数来完成）
   - 负责加载 U-Boot 主程序，或在 falcon 模式下直接加载 Linux 内核
