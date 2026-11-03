@@ -640,6 +640,105 @@ WantedBy=multi-user.target          # 开机自启动时的目标级别
 
 将文件放入 `/etc/systemd/system/` 后，执行 `systemctl daemon-reload` 即可通过 `systemctl` 管理该服务。
 
+#### 3.`[Service]` 中的 `Type=`
+
+`Type=` 告诉 systemd：程序采用什么方式启动，以及到哪一步才算“启动完成”。它不是开机自启动开关。段名要写成 `[Service]`，注意大小写。
+
+| 配置 | 程序运行方式 | systemd 什么时候认为启动完成 |
+| --- | --- | --- |
+| `Type=simple` | 程序直接运行，通常一直不退出 | 创建启动进程后；不等待程序初始化完成 |
+| `Type=exec` | 与 simple 类似 | 成功执行程序后；不等待业务初始化完成 |
+| `Type=oneshot` | 执行任务，执行完退出 | 启动命令成功执行并退出后 |
+| `Type=forking` | 程序自行创建后台子进程，原父进程退出 | 原父进程成功退出后 |
+| `Type=notify` | 程序主动报告自己已经准备好 | 收到程序发送的 `READY=1` 通知后 |
+
+**持续运行的程序：simple 或 exec**
+
+```ini
+[Service]
+Type=simple
+ExecStart=/usr/bin/my_mqtt_app
+```
+
+程序直接运行并持续接收消息，不需要在命令后加 `&`，也不需要自行转到后台。systemd 会管理这个进程。
+
+`simple` 认为启动完成时，程序可能还没有读完配置，也可能还没有连接 MQTT Broker。`exec` 能进一步确认程序已成功执行，例如发现可执行文件不存在等启动错误，但仍不代表 MQTT 已连接成功。较老的 systemd 版本可能不支持 `exec`。
+
+**执行初始化任务：oneshot**
+
+```ini
+[Service]
+Type=oneshot
+ExecStart=/bin/sh /usr/bin/run_applications.sh start
+ExecStop=/bin/sh /usr/bin/run_applications.sh stop
+RemainAfterExit=true
+```
+
+systemd 等待启动脚本执行结束，脚本成功退出后才认为启动完成。
+
+- `RemainAfterExit=true`：启动命令退出后，仍把服务记为 active，因此可能看到 `active (exited)`。
+- 如果脚本把业务程序放到后台后就退出，`active (exited)` 只能说明启动任务成功完成，不能证明后台业务程序一直正常运行。
+- `oneshot` 不表示永远只能执行一次；服务可以停止后再次启动。
+
+**程序自行转到后台：forking**
+
+```ini
+[Service]
+Type=forking
+ExecStart=/usr/sbin/mydaemon
+PIDFile=/run/mydaemon.pid
+```
+
+程序启动后自行创建后台子进程，原父进程退出，子进程继续提供服务。`PIDFile=` 指向程序写入的 PID 文件，帮助 systemd 找到继续运行的主进程，不是让 systemd 自动创建这个文件。
+
+只有程序本身采用这种启动方式时才使用 `forking`，不是想让程序后台运行就填写它。
+
+**等待程序真正准备好：notify**
+
+```ini
+[Service]
+Type=notify
+ExecStart=/usr/bin/my_server
+```
+
+程序先读取配置、初始化资源、监听端口，然后发送 `READY=1`，systemd 收到通知才认为服务启动完成。
+
+程序必须实现通知功能，通常通过 `sd_notify()` 发送通知。不能只把一个普通程序的配置改成 `Type=notify`；如果程序不发送通知，systemd 会一直等待，最终可能启动超时。
+
+如果 B 配置了 `After=A.service`，并且 A、B 都被安排启动，那么 B 的启动要等 A 的启动流程完成。A 在哪一步算启动完成，就取决于 A 的 `Type=`。`After=` 本身不负责启动 A，也不保证 A 启动成功。
+
+#### 4.查找使用 `Type=notify` 的服务
+
+在设备上执行下面的命令，查找常见 systemd 目录里的配置：
+
+```shell
+grep -RnsE '^[[:space:]]*Type[[:space:]]*=[[:space:]]*notify[[:space:]]*$' \
+    /etc/systemd/system /lib/systemd/system /usr/lib/systemd/system 2>/dev/null
+```
+
+输出格式为“文件路径:行号:配置内容”，例如：
+
+```text
+/lib/systemd/system/example.service:10:Type=notify
+```
+
+- `-R`：递归搜索子目录，并跟随符号链接。
+- `-n`：显示行号；`-s`：不显示文件无法读取等错误。
+- `-E`：使用扩展正则表达式，允许等号两侧存在空白。
+- `2>/dev/null`：丢弃错误输出，例如某个目录不存在的提示。
+- `/lib` 和 `/usr/lib` 在某些系统上指向同一位置，因此结果可能重复。
+
+找到后，把下面的 `example.service` 换成实际服务名：
+
+```shell
+systemctl cat example.service
+systemctl show example.service -p Type
+```
+
+`systemctl cat` 查看单元文件及其补充配置；`systemctl show -p Type` 查看 systemd 当前实际加载的类型。
+
+搜索文件只是寻找配置位置：主文件可能被 `/etc` 下的同名单元覆盖，也可能被补充配置修改，因此最终以 `systemctl show` 的结果为准。修改单元文件后，需要执行 `systemctl daemon-reload`，systemd 才会重新加载配置。
+
 ### 5.`.target`文件
 
  `.target`可以理解成启动名单，举个例子的目录来说：

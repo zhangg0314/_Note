@@ -13,6 +13,7 @@ Bootloader是在操作系统运行之前运行的一小段代码，用于将软�
 - 给Linux内核传参
 - 执行用户命令（如U-Boot命令）
 
+<<<<<<< HEAD:嵌入式开发笔记/08_Linux系统移植与驱动开发/02_UBoot启动流程.md
 # U-Boot安全启动
 
 ## 1.安全引导
@@ -140,6 +141,8 @@ BootROM → loader(带DDR init) → trust.img → uboot → kernel
   EL1NS  #U-Boot
 ```
 
+=======
+>>>>>>> 8716b78ead867c39620c2f161575315c0e2dd284:嵌入式开发笔记/08_Linux系统移植与驱动开发/03_U-Boot启动总体流程.md
 ## 6.参考链接
 
 [ATF引导启动流程整理-Part1：简介部分 - silas12138 - 博客园](https://www.cnblogs.com/silas041301/p/18679630)
