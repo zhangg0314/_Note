@@ -771,41 +771,289 @@ ip=192.168.0.102
 
 ## 1.基本概念
 
-DM (Driver Model) 是 U-Boot 标准的 device-driver 开发模型，跟 kernel 的 device-driver 模型非常类似。
+### 1.三个核心对象
 
-```txt
-Terminology
------------
-Uclass - a group of devices which operate in the same way. A uclass provides a way of accessing individual devices within the group, but always using the same interface. For example a GPIO uclass provides operations for get/set value. An I2C uclass may have 10 I2C ports,4 with one driver, and 6 with another.
+DM (Driver Model) 是 U-Boot 标准的 device-driver 开发模型，跟 kernel 的 device-driver 模型非常类似。整个DM框架就是三个核心对象：
 
-Driver - some code which talks to a peripheral and presents a higher-level interface to it.
+| 对象 | 含义 | 例子 |
+| --- | --- | --- |
+| `uclass` | 运行时管理同类设备的对象，保存类规则指针和设备链表 | 串口类对象（编号为 `UCLASS_SERIAL`） |
+| `driver` | `U_BOOT_DRIVER()` 定义的驱动记录，包含匹配表、probe 和硬件操作 | `ns16550_serial` |
+| `udevice` | 一台具体设备的运行时实例，记录其驱动、uclass、父设备、设备树节点等 | RK3506 的 `uart0` |
 
-Device - an instance of a driver, tied to a particular port or peripheral.
+### 2.DM 框架分层调用图
+
+下图按**代码职责和调用层次**排列。实线是串口发送字符时的调用方向；虚线表示设备首次获取时的激活调用，或对象之间的管理关系。NS16550 与 PL011 是两种可选的具体串口驱动。
+
+```mermaid
+graph TB
+    subgraph L1["第 1 层：上层调用者"]
+        APP["控制台 / 命令代码"]
+    end
+
+    subgraph L2["第 2 层：串口类公共接口 · serial-uclass.c"]
+        API["serial_putc / serial_getc<br/>统一接口；换行处理、重试等共用逻辑"]
+        RULE["UCLASS_DRIVER(serial)<br/>post_probe 等类级规则"]
+    end
+
+    subgraph L3["第 3 层：DM 核心和运行时对象"]
+        ACT["uclass_get_device → device_probe<br/>首次获取时激活设备"]
+        UC["struct uclass<br/>同类设备的链表 dev_head"]
+        DEV["当前 struct udevice<br/>保存 dev→driver、dev→uclass"]
+    end
+
+    subgraph L4["第 4 层：具体硬件驱动 · U_BOOT_DRIVER"]
+        NS["NS16550<br/>ns16550_serial_probe / ns16550_serial_putc"]
+        PL["PL011<br/>pl01x_serial_probe / pl01x_serial_putc"]
+    end
+
+    subgraph L5["第 5 层：硬件"]
+        HN["NS16550 UART 寄存器"]
+        HP["PL011 UART 寄存器"]
+    end
+
+    APP -->|"发送字符"| API
+    API -->|"serial_get_ops(dev) 取得当前设备的驱动 ops"| DEV
+    DEV -->|"ops→putc；按驱动选择其一"| NS
+    DEV -->|"ops→putc；按驱动选择其一"| PL
+    NS --> HN
+    PL --> HP
+
+    APP -. "首次取得设备" .-> ACT
+    ACT -. "调用具体驱动的 probe" .-> NS
+    ACT -. "调用具体驱动的 probe" .-> PL
+    RULE -. "uc_drv 指向类规则" .-> UC
+    UC -. "dev_head 管理同类设备" .-> DEV
 ```
 
-## 2.与Linux驱动的差异
+**实际发送字符的主调用链：**上层 `serial_putc()` → `serial-uclass.c` 的 `_serial_putc()` → `serial_get_ops(dev)` 取 `dev->driver->ops` → 当前驱动的 `putc()` → UART 寄存器。`struct uclass` 管理同类设备；正常发送字符时无需每次遍历它的设备链表。`device_probe()` 属于首次获取设备时的激活路径，不是每发一个字符都调用。
 
-U-Boot 和 Linux 内核在设备驱动初始化机制上的一个核心差异就是：**U-Boot 不会自动探测和初始化设备，必须由开发者在代码中显式调用 probe 函数来激活驱动**。
+图中 `UCLASS_DRIVER(serial)` 是串口类的静态规则，`struct uclass` 是运行时的串口分组，`struct udevice` 代表一台具体串口，`U_BOOT_DRIVER(...)` 则定义具体驱动。设备树描述的具体硬件在 bind 时形成 `udevice`；它不是上图中“发送字符”调用链的一层。
 
-### 1.Linux 内核自动 probe
-
-在 Linux 内核中，当系统启动时，内核会先解析设备树，识别所有硬件设备。然后遍历所有已注册的驱动，通过`compatible`属性匹配设备和驱动一旦匹配成功，内核会**自动调用驱动的 probe 函数**，完成设备初始化。整个过程是全自动的，开发者不需要手动编写代码触发 probe，内核框架会处理好一切。
-
-### 2.U-Boot 手动 probe
-
-在 U-Boot 中，虽然也有设备树解析和驱动注册，但**不会自动执行 probe**，必须由开发者在初始化代码（如板级初始化函数）中，通过类似以下的方式**主动调用 probe**，只有执行了这些主动调用，驱动的 probe 函数才会被执行，设备才会被初始化。
+### 3.两个重要宏
 
 ```c
-// 步骤1：通过设备名获取设备并触发probe，该接口的核心调用就是device_probe
-uclass_get_device_by_name(UCLASS_I2C_GENERIC, "lt8912b", &dev);
+#define U_BOOT_DRIVER(__name) \
+    ll_entry_declare(struct driver, __name, driver)
 
-// 步骤2：直接调用probe函数
-device_probe(dev);
+#define UCLASS_DRIVER(__name) \
+    ll_entry_declare(struct uclass_driver, __name, uclass)
+
+#define ll_entry_declare(_type, _name, _list) \
+    _type _u_boot_list_2_##_list##_2_##_name __aligned(4) \
+        __attribute__((unused, \
+            section(".u_boot_list_2_" #_list "_2_" #_name)))
 ```
 
-## 3.probe基本原理
+这里 `##` 把几个词拼成一个 **C 变量名**；`#` 把参数变成**字符串**，用于生成段名。`__aligned(4)` 要求该变量按 4 字节对齐；`section(...)` 把变量放到指定的链接段。`= { ... }` 是给最终生成的结构体变量赋初值，**不属于宏的参数**。
 
-`device_probe()` 是 U-Boot 设备模型中最核心的函数之一，负责完成设备的初始化工作。它的主要作用是将设备（`struct udevice`）与驱动（`struct driver`）绑定，并执行一系列初始化操作，最终调用驱动的 `probe` 函数激活设备。以下是逐段代码的详细解释：
+#### 1.`UCLASS_DRIVER(serial)`
+
+```c
+UCLASS_DRIVER(serial) = {
+    .id = UCLASS_SERIAL,
+    .name = "serial",
+    .flags = DM_UC_FLAG_SEQ_ALIAS,
+    .post_probe = serial_post_probe,
+    .pre_remove = serial_pre_remove,
+    .per_device_auto_alloc_size = sizeof(struct serial_dev_priv),
+};
+```
+
+第一层展开为 `ll_entry_declare(struct uclass_driver, serial, uclass) = { ... };`。再展开 `ll_entry_declare`，得到的变量声明相当于：
+
+```c
+struct uclass_driver _u_boot_list_2_uclass_2_serial
+    __aligned(4)
+    __attribute__((unused, section(".u_boot_list_2_uclass_2_serial"))) = {
+    .id = UCLASS_SERIAL,
+    .name = "serial",
+    .flags = DM_UC_FLAG_SEQ_ALIAS,
+    .post_probe = serial_post_probe,
+    .pre_remove = serial_pre_remove,
+    .per_device_auto_alloc_size = sizeof(struct serial_dev_priv),
+};
+```
+
+对着展开结果看：它定义了**一个全局 `struct uclass_driver` 变量**，变量名是 `_u_boot_list_2_uclass_2_serial`，被放进 `.u_boot_list_2_uclass_2_serial` 段。`.id` 指定这是 `UCLASS_SERIAL` 类；`.post_probe` 等字段提供这一类设备共同使用的管理回调；`.per_device_auto_alloc_size` 告诉 DM 每台串口需要多少类私有数据。它不是某个 UART 寄存器的驱动。
+
+#### 2.`U_BOOT_DRIVER(ns16550_serial)`
+
+```c
+U_BOOT_DRIVER(ns16550_serial) = {
+    .name = "ns16550_serial",
+    .id = UCLASS_SERIAL,
+    .of_match = ns16550_serial_ids,
+    .probe = ns16550_serial_probe,
+    .ops = &ns16550_serial_ops,
+};
+```
+
+第一层展开为 `ll_entry_declare(struct driver, ns16550_serial, driver) = { ... };`。第二层展开后，以上示例相当于：
+
+```c
+struct driver _u_boot_list_2_driver_2_ns16550_serial
+    __aligned(4)
+    __attribute__((unused,
+        section(".u_boot_list_2_driver_2_ns16550_serial"))) = {
+    .name = "ns16550_serial",
+    .id = UCLASS_SERIAL,
+    .of_match = ns16550_serial_ids,
+    .probe = ns16550_serial_probe,
+    .ops = &ns16550_serial_ops,
+};
+```
+
+定义的是**一个全局 `struct driver` 变量**，在 `driver` 链接段中。宏参数 `ns16550_serial` 用于拼接 C 变量名和段名；初始化器里的 `.name = "ns16550_serial"` 是结构体中的字符串字段，两者不是同一个东西。`.id` 表明驱动属于串口类；`.of_match` 指向设备树 `compatible` 匹配表；`.probe` 指向初始化硬件的函数；`.ops` 指向 `putc`、`getc` 等具体操作函数表。
+
+#### 3.DM 怎么使用它们
+
+先分清 **编译时已有的记录** 和 **启动时创建的对象**：
+
+| 名称 | 何时存在 | 作用 |
+| --- | --- | --- |
+| `struct driver` | `U_BOOT_DRIVER(ns16550_serial)` 编译、链接后就存在 | 保存匹配表、`.probe`、`.ops` 等驱动信息 |
+| `struct uclass_driver` | `UCLASS_DRIVER(serial)` 编译、链接后就存在 | 保存串口类的编号和类级回调 |
+| `struct uclass` | DM 运行时按需创建 | 管理当前串口类及其设备链表，指向上面的 `uclass_driver` |
+| `struct udevice` | 某个设备被 bind 时创建 | 代表一台具体设备，保存它对应的 `driver` 和 `uclass` 指针 |
+
+`ll_entry_start(struct driver, driver)` 取得**驱动记录数组的起始地址**；`ll_entry_count(struct driver, driver)` 得到其中有多少条记录。对 `uclass` 列表也一样。这两个接口只让代码能够遍历链接时已放进去的结构体变量，**不会创建设备，也不会初始化硬件**。
+
+**这里的“串口类”是 DM 在运行时建立的一个“串口设备分组”。**这个分组用一份 `struct uclass` 表示。源码 `include/dm/uclass.h` 中，它的关键字段是：
+
+```c
+struct uclass {
+    void *priv;                    /* 这类设备共用的可选私有数据 */
+    struct uclass_driver *uc_drv;  /* 指向预先定义的“串口类规则” */
+    struct list_head dev_head;     /* 已绑定的串口设备链表 */
+    struct list_head sibling_node; /* 把本类连入所有 uclass 的链表 */
+    /* 部分配置还有其他字段 */
+};
+```
+
+以串口为例：`UCLASS_DRIVER(serial)` 早已定义一份 `struct uclass_driver`，其中写着编号 `UCLASS_SERIAL`、名称 `"serial"`、`post_probe` 等类级回调。**这份静态规则和运行时的 `struct uclass` 是两个不同的对象**：后者用 `uc_drv` 指向前者，用 `dev_head` 串起归在串口类的各台 `udevice`。
+
+第一次执行 `uclass_get(UCLASS_SERIAL, &uc)` 时，如果运行时还没有串口类，`uclass_add()` 会：
+
+1. 从 `UCLASS_DRIVER()` 建立的静态列表中，按 `UCLASS_SERIAL` 找到串口类规则 `uc_drv`。
+2. 用 `calloc()` 分配一份 `struct uclass`，令 `uc->uc_drv = uc_drv`，初始化空的 `uc->dev_head`，并把 `uc` 加入 DM 的类链表。
+3. 返回 `uc`。以后再调用 `uclass_get(UCLASS_SERIAL, &uc)`，直接取得已有的这份类对象。
+
+此时只是建好了“串口设备分组”，**还没有新建任何一台串口的 `udevice`**。接下来的 `device_bind_common()` 才用另一处 `calloc()` 分配 `struct udevice`，填写 `dev->driver` 和 `dev->uclass = uc`，并把设备加入对应链表。因此一个 `struct uclass` 可以管理多台串口设备。
+
+```text
+UCLASS_DRIVER(serial) → 静态类规则（struct uclass_driver）
+uclass_get()          → 取得/创建串口分组（struct uclass）
+device_bind_common()  → 为某台串口创建设备对象（struct udevice）
+```
+
+串口“都能调用 `putc` / `getc`”的接口形式由 `include/serial.h` 中的 `struct dm_serial_ops` 约定，各具体串口驱动通过自己的 `.ops` 提供实现；`struct uclass` 主要负责组织同类设备，不保存某台串口的硬件寄存器。
+
+#### 4.已经有设备和驱动，为什么还要 uclass？
+
+**如果只考虑一台串口，`udevice → driver → putc` 的确能完成发送。**但 U-Boot 还要让同一套控制台代码使用不同厂家的串口，并集中处理这类设备的共同工作。
+
+本源码有两种不同的串口驱动：`ns16550_serial` 和 `serial_pl01x`。它们都写 `.id = UCLASS_SERIAL`，并分别提供一份符合 `struct dm_serial_ops` 形式的操作表：
+
+```c
+/* 摘录各自的操作表；其他字段省略 */
+const struct dm_serial_ops ns16550_serial_ops = {
+    .putc = ns16550_serial_putc,
+};
+static const struct dm_serial_ops pl01x_serial_ops = {
+    .putc = pl01x_serial_putc,
+};
+```
+
+上层调用 `serial_putc('A')` 时，串口类代码取出当前串口设备 `dev`，用 `serial_get_ops(dev)` 把 `dev->driver->ops` 转为 `struct dm_serial_ops *`，再调用 `ops->putc(dev, 'A')`。它无须在每个调用处判断“这是 NS16550 还是 PL011”。
+
+串口类还处理**两种驱动都需要的事情**。例如 `serial-uclass.c` 的 `_serial_putc()` 在发送换行符前补回车，并在驱动返回 `-EAGAIN` 时重试；`UCLASS_DRIVER(serial)` 的 `.post_probe = serial_post_probe` 会在具体驱动 probe 后统一设置波特率，配置允许时还会注册 stdio 设备。这些共用逻辑写一次即可。
+
+所以三者分工是：
+
+| 对象 | 负责什么 |
+| --- | --- |
+| `udevice` | 代表**哪一台**串口，保存它使用的驱动和设备数据 |
+| `driver` 与它的 `.ops` | 解决**这种硬件具体怎么操作寄存器** |
+| 串口 `uclass`、`UCLASS_DRIVER(serial)` 及串口类代码 | 组织**所有串口设备**，提供统一的串口使用方式和共用处理 |
+
+你说的“通过设备回调到驱动”正是调用链的后半段；uclass 增加的是**前面的统一入口与同类设备的公共管理**。U-Boot 的各种设备也不都使用 `open/read/write` 三个函数：串口常用 `putc/getc`，I²C 总线常用 `xfer`，接口形式由各自的设备类别约定。
+
+源码对照：`drivers/serial/serial-uclass.c:149`、`:238`、`:439`、`:504`，`drivers/serial/ns16550.c:600`，`drivers/serial/serial_pl01x.c:333`，`include/serial.h:76`。
+
+#### 5.运行示例
+
+假设设备树里有一个**已启用**的串口节点，写着 `compatible = "snps,dw-apb-uart"`。这句话是在说：“板上有一台这种串口硬件。”在扫描设备树之前，程序里已经有两份资料：
+
+- `U_BOOT_DRIVER(ns16550_serial)` 生成的驱动记录：写着我能处理 `snps,dw-apb-uart`；初始化用 `ns16550_serial_probe`。
+- `UCLASS_DRIVER(serial)` 生成的串口类记录：写着这类设备的编号是 `UCLASS_SERIAL`，类级回调有哪些。
+
+**这两份资料都不是板上的那台串口。**启动后，DM 才按下面的顺序处理那台串口：
+
+1. 读设备树节点的 `compatible`，找到能处理它的 `ns16550_serial` 驱动记录。
+
+   驱动记录写着 `.id = UCLASS_SERIAL`，DM 因而知道它归串口类管理，并取得串口类的规则。`UCLASS_SERIAL` 只是串口类的编号，不是一台设备。
+
+2. DM 为**这一个设备树节点**新建一个 `struct udevice`。这个对象保存对应哪个驱动、属于哪个类、来自哪个设备树节点。这一步叫 **bind**，硬件此时通常还没初始化。
+
+3. 后来代码要使用这台串口，DM 才调用驱动的 `.probe` 初始化硬件。这一步叫 **probe**。
+
+- `lists_bind_fdt()` 找匹配驱动；
+- `device_bind_with_driver_data()` 进入 bind；内部先通过 `uclass_get()` 取得或创建串口类，再由 `device_bind_common()` 单独分配 `udevice`。
+- `uclass_get_device...()` 在使用时触发 `device_probe()`。
+
+## 2.bind 与 probe
+
+`bind` 是登记设备，`probe` 是初始化设备。
+
+1. 对一个已启用的串口节点，U-Boot 扫描设备树，匹配串口驱动并创建 `udevice`。这一步叫 **bind**：登记这台串口，通常尚未配置硬件。
+2. 后续代码需要使用这台串口时，通过 `uclass_get_device...()` 取得它，DM 调用 `device_probe()`，再调用驱动的 `.probe`（若提供）。这一步叫 **probe**：让设备可用。
+
+```text
+发现已启用的串口节点 → bind（登记） → 需要使用时 probe（初始化） → 使用串口
+```
+
+源码中的 `dm_init_and_scan()` 主要对应扫描并登记；`uclass_get_device...()` 对应取得设备，并确保它已激活。Linux 内核通常会在设备与驱动匹配后由框架安排 probe；U-Boot 通常等代码要用设备时才触发 probe。触发者可以是 U-Boot 自己的 `serial_init()`，不要求开发者每次都直接写 `device_probe()`。
+
+例如：
+
+```c
+struct udevice *dev;
+int ret = uclass_get_device(UCLASS_RAM, 0, &dev);
+```
+
+- `UCLASS_RAM`
+  要找的是 **RAM 这一类**设备。
+- `0`
+  找这类设备列表中的**第一个**。它是列表位置，不是内存地址。
+- `&dev`
+  让函数把找到的设备对象写入变量 `dev`。
+- `ret`
+  ``0` 表示成功；负数表示没有找到或激活失败。成功后，`dev` 指向已经激活、可供使用的设备。
+
+这一个 `get` 调用内部已经完成了以下步骤：
+
+```text
+在 RAM 类中找第一个设备 → device_probe(dev) → 把设备指针交给调用者
+```
+
+因此，调用 `uclass_get_device()` 成功后，**无需再手动调用一次 `device_probe(dev)`**。如果设备之前已经激活，`device_probe()` 会直接返回，不会重复执行驱动初始化。
+
+## 4.find 与 get
+
+**`find` 只找设备；`get` 找到后还会确保设备已激活。**只有想先取得设备对象、稍后才激活时，才考虑先 `uclass_find_device()`，再 `device_probe()`的两步写法。其他 `uclass_get_device_by_...()` 函数也就只是换一种**查找设备的依据**：找到后也会激活设备。
+
+- `by_name` 按设备名
+
+- `by_seq` 按设备编号
+
+- `by_ofnode` 按设备树节点。
+
+`index`（列表位置）与 `seq`（分配给设备的编号）不是同一个东西：假设列表里排在第一的是编号为 2 的 UART，那么它的 `index` 是 0，`seq` 是 2。
+
+## 5.probe基本原理
+
+`device_probe()` 是 U-Boot 设备模型中最核心的函数之一，负责完成设备的初始化工作。它的作用是激活已绑定的设备：准备数据、先激活父设备、执行各级回调，并在驱动提供 `.probe` 时调用它。绑定发生在更早的 `device_bind()` 阶段。以下是逐段代码的详细解释：
 
 ```c
 /*Activate a device so that it is ready for use. All its parents are probed first.*/
@@ -819,7 +1067,7 @@ int device_probe(struct udevice *dev)
 	if (dev->flags & DM_FLAG_ACTIVATED)//设备已激活
 		return 0;
 	drv = dev->driver;
-	assert(drv);//判断传入的设备是否绑定与之匹配的驱动，即driver是否为空
+	assert(drv);//断言绑定阶段已为设备设置非空 driver；这里不重新执行驱动匹配
     
     //2.申请数据
 	/*分配驱动私有数据（如果驱动需要且未分配）,存储驱动的私有数据（如硬件寄存器缓存、状态变量等）*/
@@ -842,7 +1090,7 @@ int device_probe(struct udevice *dev)
     //3. 初始化父设备（依赖处理）
 	/* Ensure all parents are probed */
 	if (dev->parent) {
-        /*分配父设备的所有子设备私有数据（如果需要）*/
+        /*若父驱动或父 uclass 要求，为当前这个子设备分配 parent_priv*/
 		size = dev->parent->driver->per_child_auto_alloc_size;
 		if (!size) {
 			size = dev->parent->uclass->uc_drv->
@@ -861,7 +1109,7 @@ int device_probe(struct udevice *dev)
 			goto fail;
 
 		/*
-		 /* 父设备初始化时可能已间接初始化当前设备，需再次检查状态
+		 * 父设备初始化时可能已间接初始化当前设备，需再次检查状态
 		 * (e.g. PCI bridge devices). Test the flags again
 		 * so that we don't mess up the device.
 		 */
@@ -905,7 +1153,7 @@ int device_probe(struct udevice *dev)
     
     //6.设备树数据转换与驱动probe
 	/* 
-	 将设备树数据转换为驱动的平台数据（platdata）,如果驱动定义了 ofdata_to_platdata 方法（用于解析设备树属性），且设备         有设备树节点，则调用该方法将设备树中的配置（如寄存器地址、时钟频率）转换为驱动可直接使用的平台数据（dev->platdata）。 
+	 将设备树数据转换为驱动的平台数据（platdata）,如果驱动定义了 ofdata_to_platdata 方法（用于解析设备树属性），且设备有设备树节点，则调用该方法将设备树中的配置（如寄存器地址、时钟频率）转换为驱动可直接使用的平台数据（dev->platdata）。 
 	*/
     if (drv->ofdata_to_platdata && dev_has_of_node(dev)) {
 		ret = drv->ofdata_to_platdata(dev);
@@ -948,11 +1196,26 @@ int device_probe(struct udevice *dev)
 }
 ```
 
-`device_probe()` 的核心逻辑可概括为：**检查状态 → 分配资源 → 初始化父设备 → 预处理（引脚、类、父设备） → 解析设备树 → 调用驱动 probe → 后处理**。整个过程确保了设备初始化的依赖顺序（父设备优先）、资源分配（私有数据）和硬件配置（引脚、设备树参数）的正确性，最终通过驱动的 `probe` 函数完成硬件激活。
+`device_probe()` 的核心逻辑可概括为：**检查状态 → 分配资源 → 激活父设备 → 分配 seq → 配置 pinctrl 与执行 pre_probe 回调 → 解析设备树 → 调用驱动 probe（若提供）→ post_probe 回调**。`DM_FLAG_ACTIVATED` 在驱动回调前设置，用于处理递归进入；后续若失败，会清除该标志、重置 `seq` 并释放本次激活的资源。失败不会自动把 `udevice` 从 DM 中解绑，已经成功激活的父设备也不会因此自动撤销。驱动没有 `.probe` 时，框架仍可完成激活。
+
+## 6.三个核心函数
+
+- `device_bind()` 
+  负责把设备实例纳入 DM；
+- `device_probe()` 
+  负责让已绑定的设备可用；`drv->probe(dev)` 是具体驱动的回调。先递归激活父设备，再激活当前设备。入口检查 `DM_FLAG_ACTIVATED`，已激活设备再次调用时直接返回 0。
+- `uclass_pre_probe_device()` 
+  包含当前 uclass 的 `pre_probe` 和父 uclass 的 `child_pre_probe`；随后框架还会单独调用父驱动的 `child_pre_probe`。
+
+## 4.在 U-Boot 本体、SPL、TPL 中使用 DM
+
+`CONFIG_DM`、`CONFIG_SPL_DM`、`CONFIG_TPL_DM` 分别控制 U-Boot 本体、SPL、TPL 是否启用 DM；`CONFIG_SPL_BUILD` / `CONFIG_TPL_BUILD` 表示当前编译阶段，不是 DM 开关。早期阶段启用 DM 时还需要可用的内存分配空间。
+
+先前看到的 `arch/arm/mach-rockchip/tpl.c` 中，`uclass_get_device(UCLASS_RAM, 0, &dev)` 只在 `CONFIG_SPL_FRAMEWORK` 且当前阶段未启用 `TINY_FRAMEWORK` 的条件分支中执行；另一分支直接调用 `sdram_init()`。因此不能只凭源码存在这句 `UCLASS_RAM` 调用，就推断 RK3506 的某个 TPL 镜像一定通过 DM 初始化 DDR。
 
 ------
 
-# FIT镜像树
+
 
 ## 1.概念介绍
 
