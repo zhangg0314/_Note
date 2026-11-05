@@ -789,7 +789,7 @@ getty.target.wants/
 
 ### 8.模板单元与实例化
 
-文件名含 `@` 的服务为**模板单元**，如 `usb-mount@.service`、`autovt@.service`。模板本身不直接运行，而是按需实例化出具体实例，如 `usb-mount@sda1.service`。
+文件名含 `@` 的服务为**模板单元**，如 `usb-mount@.service`、`autovt@.service`。**`@` 用来把“服务名”和“实例名”分开，让一份模板用于多个实例**模板本身不直接运行，而是按需实例化出具体实例，如 `usb-mount@sda1.service`。
 
 模板单元就是带一个参数空位的服务配置；实例化，就是给这个空位填一个具体值，让 systemd 按这个值管理一个具体服务。`@` 后面留空，表示模板：
 
