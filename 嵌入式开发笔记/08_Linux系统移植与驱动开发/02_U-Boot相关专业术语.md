@@ -269,13 +269,370 @@ BootROM → loader(带DDR init) → trust.img → uboot → kernel
 
 ## 1.基本概念
 
-DM (Driver Model) 是 U-Boot 标准的 device-driver 开发模型，跟 kernel 的 device-driver 模型非常类似。整个DM框架就是三个核心对象：
+DM (Driver Model) 是 U-Boot 标准的 device-driver 开发模型，跟 kernel 的 device-driver 模型非常类似。整个DM框架的三个核心对象如下：
 
-| 对象      | 含义                                                         | 例子                                 |
-| --------- | ------------------------------------------------------------ | ------------------------------------ |
-| `uclass`  | 运行时管理同类设备的对象，保存类规则指针和设备链表           | 串口类对象（编号为 `UCLASS_SERIAL`） |
-| `driver`  | `U_BOOT_DRIVER()` 定义的驱动记录，包含匹配表、probe 和硬件操作 | `ns16550_serial`                     |
-| `udevice` | 一台具体设备的运行时实例，记录其驱动、uclass、父设备、设备树节点等 | RK3506 的 `uart0`                    |
+| 对象      | 含义                                                         | 例子                           |
+| --------- | ------------------------------------------------------------ | ------------------------------ |
+| `uclass`  | 运行时管理同类设备的对象，保存类规则指针和设备链表           | enum uclass_id；id与类一一对应 |
+| `driver`  | 包含设备树匹配表，所属的uclass id、probe 和硬件操作ops，由`U_BOOT_DRIVER()` 定义为全局驱动记录 | `led_gpio`                     |
+| `udevice` | 一台具体设备的运行时实例，记录其驱动、uclass、父设备、设备树节点等 | RK3506 的 `uart0`              |
+
+## 2.结构体源码分析
+
+| 结构体                 | 本质                     | 数量                        | 存放位置                |
+| ---------------------- | ------------------------ | --------------------------- | ----------------------- |
+| `struct driver`        | 驱动的静态代码/模板      | 每个 `U_BOOT_DRIVER()` 一个 | 链接段中，只读静态数据  |
+| `struct uclass_driver` | 设备类的静态规则         | 每个 `UCLASS_DRIVER()` 一个 | 链接段中，只读静态数据  |
+| `struct uclass`        | 一类设备的运行时分组容器 | 每个 `uclass_id` 一个       | DM 运行时 `calloc` 分配 |
+| `struct udevice`       | 一台具体设备的运行时实例 | 每个设备实例一个            | `bind` 时 `calloc` 分配 |
+
+```c
+driver/uclass_driver是编译期模板，uclass/udevice是运行期对象。
+```
+
+### 1.设备实例
+
+源码：`include/dm/device.h`
+
+```c
+struct udevice {
+    const struct driver *driver;   /* 指向静态驱动模板 */
+    const char *name;              /* 设备名，通常是设备树节点名 */
+    void *platdata;                /* 本设备的配置数据 */
+    void *parent_platdata;         /* 父总线给本设备保存的配置数据 */
+    void *uclass_platdata;         /* uclass 给本设备保存的配置数据 */
+    ofnode node;                   /* 对应的设备树节点 */
+    ulong driver_data;             /* of_match 匹配到的 data */
+    struct udevice *parent;        /* 父设备，根设备为 NULL */
+    void *priv;                    /* 驱动私有数据 */
+    struct uclass *uclass;         /* 所属的 uclass */
+    void *uclass_priv;             /* uclass 给本设备保存的私有数据 */
+    void *parent_priv;             /* 父设备给本设备保存的私有数据 */
+    struct list_head uclass_node;  /* 挂入 uclass->dev_head */
+    struct list_head child_head;   /* 本设备的孩子链表头 */
+    struct list_head sibling_node; /* 挂入 parent->child_head */
+    uint32_t flags;                /* DM_FLAG_... */
+    int req_seq;                   /* alias 请求的序号，-1 表示任意 */
+    int seq;                       /* probe 时解析出的唯一序号 */
+#ifdef CONFIG_DEVRES
+    struct list_head devres_head;  /* devm_* 分配的资源链表 */
+#endif
+};
+```
+
+`udevice` 同时身处**两套组织关系**中：
+
+1. **父子树**
+   `parent` + `child_head` + `sibling_node`，描述设备树上的层级，比如 `i2c0` 下面挂着 `pmic`。
+2. **同类链表**
+   `uclass` + `uclass_node`，把同一类设备串进 `uclass->dev_head`，比如所有串口都在 `UCLASS_SERIAL` 下面。
+
+此外 `dev->driver->ops` 决定这台设备具体怎么操作硬件，`dev->uclass` 决定这台设备归哪一类统一管理。`udevice` 里有六个 `void *` 数据指针区分如下：
+
+| 指针              | 分配依据                                                     | 拥有者/使用者  |
+| ----------------- | ------------------------------------------------------------ | -------------- |
+| `platdata`        | `driver.platdata_auto_alloc_size`，或 `U_BOOT_DEVICE` / 平台代码直接提供 | 驱动           |
+| `priv`            | `driver.priv_auto_alloc_size`                                | 驱动           |
+| `uclass_platdata` | `uclass_driver.per_device_platdata_auto_alloc_size`          | `uclass`       |
+| `uclass_priv`     | `uclass_driver.per_device_auto_alloc_size`                   | `uclass`       |
+| `parent_platdata` | 父设备 `driver.per_child_platdata_auto_alloc_size`，为 0 时用父 `uclass_driver` 的值 | 父设备（总线） |
+| `parent_priv`     | 父设备 `driver.per_child_auto_alloc_size`，为 0 时用父 `uclass_driver` 的值 | 父设备（总线） |
+
+分配时机也不同：
+
+- **bind 阶段**（`device_bind_common()`）分配 `platdata`、`uclass_platdata`、`parent_platdata`。此时只登记设备，不初始化硬件。
+- **probe 阶段**（`device_probe()`）分配 `priv`、`uclass_priv`、`parent_priv`。此时才真正激活硬件。
+
+对应的取值函数分别是 `dev_get_platdata()`、`dev_get_priv()`、`dev_get_uclass_priv()`、`dev_get_parent_priv()` 等。
+
+### 2.驱动模板
+
+源码：`include/dm/device.h`
+
+```c
+struct driver {
+    char *name;
+    enum uclass_id id;                      /* 属于哪个 uclass */
+    const struct udevice_id *of_match;      /* compatible 匹配表 */
+    int (*bind)(struct udevice *dev);
+    int (*probe)(struct udevice *dev);
+    int (*remove)(struct udevice *dev);
+    int (*unbind)(struct udevice *dev);
+    int (*ofdata_to_platdata)(struct udevice *dev); /* DT -> platdata */
+    int (*child_post_bind)(struct udevice *dev);
+    int (*child_pre_probe)(struct udevice *dev);
+    int (*child_post_remove)(struct udevice *dev);
+    int priv_auto_alloc_size;               /* -> dev->priv */
+    int platdata_auto_alloc_size;           /* -> dev->platdata */
+    int per_child_auto_alloc_size;          /* -> 子设备的 parent_priv */
+    int per_child_platdata_auto_alloc_size; /* -> 子设备的 parent_platdata */
+    const void *ops;                        /* 驱动自己的操作集 */
+    uint32_t flags;
+};
+```
+
+- `id` 是**类编号**，不是设备编号。`ns16550_serial` 的 `.id = UCLASS_SERIAL`，表示它归串口类。
+- `of_match` 指向 `struct udevice_id` 数组，每个元素是 `{ compatible, data }`，匹配成功后 `data` 写入 `udevice.driver_data`。
+- `ops` 的类型是 `const void *`，具体含义由 uclass 约定。串口类会把它转换成 `struct dm_serial_ops *`，GPIO 类转换成 `struct dm_gpio_ops *`。
+- `*_auto_alloc_size` 是自动分配相关的，DM 根据这些值决定是否 `calloc` 对应的数据块。
+
+### 3.类和类驱动
+
+`struct uclass` 源码：`include/dm/uclass.h`
+
+```c
+struct uclass {
+    void *priv;                    /* 本类共用的私有数据 */
+    struct uclass_driver *uc_drv;  /* 指向静态类规则 */
+    struct list_head dev_head;     /* 本类所有 udevice 的链表头 */
+    struct list_head sibling_node; /* 挂入全局 uclass 链表 */
+#ifdef CONFIG_USING_KERNEL_DTB_V2
+    struct list_head *u_boot_dev_head;  /* RK 扩展：U-Boot 设备优先 */
+#endif
+};
+```
+
+`struct uclass_driver` 源码：`include/dm/uclass.h`
+
+```c
+struct uclass_driver {
+    const char *name;
+    enum uclass_id id;
+    int (*post_bind)(struct udevice *dev);
+    int (*pre_unbind)(struct udevice *dev);
+    int (*pre_probe)(struct udevice *dev);
+    int (*post_probe)(struct udevice *dev);
+    int (*pre_remove)(struct udevice *dev);
+    int (*child_post_bind)(struct udevice *dev);
+    int (*child_pre_probe)(struct udevice *dev);
+    int (*init)(struct uclass *class);
+    int (*destroy)(struct uclass *class);
+    int priv_auto_alloc_size;                  /* -> uclass->priv */
+    int per_device_auto_alloc_size;            /* -> dev->uclass_priv */
+    int per_device_platdata_auto_alloc_size;   /* -> dev->uclass_platdata */
+    int per_child_auto_alloc_size;             /* -> 子设备 parent_priv 的兜底 */
+    int per_child_platdata_auto_alloc_size;    /* -> 子设备 parent_platdata 兜底 */
+    const void *ops;                           /* 类统一接口 */
+    uint32_t flags;                            /* DM_UC_FLAG_... */
+};
+```
+
+`uclass` 和 `uclass_driver` 的关系，完全类比 `udevice` 和 `driver`：
+
+- `struct uclass` 是**运行时对象**，每个 `id` 只有一份，第一次 `uclass_get()` 时由 `uclass_add()`创建。
+- `struct uclass_driver` 是**静态对象**，由 `UCLASS_DRIVER()` 放进链接段，`lists_uclass_lookup(id)` 按 `id` 找到它。
+- `uclass->uc_drv` 指向静态规则，`uclass->dev_head` 串起该类的所有 `udevice`。
+
+以串口为例：
+
+```c
+UCLASS_DRIVER(serial) = {
+    .id = UCLASS_SERIAL,
+    .name = "serial",
+    .flags = DM_UC_FLAG_SEQ_ALIAS,
+    .post_probe = serial_post_probe,
+    .pre_remove = serial_pre_remove,
+    .per_device_auto_alloc_size = sizeof(struct serial_dev_priv),//每台串口设备都需要一块struct serial_dev_priv，由DM 在 probe时自动挂到dev->uclass_priv。
+};
+```
+
+### 4.三者关系图
+
+#### 1.设备与驱动对应关系
+
+以串口为例，`driver` 是 `U_BOOT_DRIVER(ns16550_serial)`，`uclass_driver` 是 `UCLASS_DRIVER(serial)`。
+
+```mermaid
+graph TB
+    subgraph STATIC["链接段中的静态模板（编译期就存在）"]
+        UCD["struct uclass_driver<br/>UCLASS_DRIVER(serial)<br/>id = UCLASS_SERIAL<br/>post_probe / pre_remove<br/>per_device_auto_alloc_size"]
+        DRV["struct driver<br/>U_BOOT_DRIVER(ns16550_serial)<br/>id = UCLASS_SERIAL<br/>of_match / probe / ops"]
+    end
+
+    subgraph RUNTIME["DM 运行时对象（calloc 创建）"]
+        UC["struct uclass<br/>uc_drv / dev_head / priv"]
+        DEV0["struct udevice<br/>name = serial@ff1a0000<br/>driver / uclass / node<br/>priv / platdata / uclass_priv"]
+        DEV1["struct udevice<br/>name = serial@ff1b0000<br/>..."]
+    end
+
+    UCD -->|"uc_drv"| UC
+    DRV -->|"dev->driver"| DEV0
+    DRV -->|"dev->driver"| DEV1
+    UC -->|"dev_head：uclass_node 链入"| DEV0
+    UC -->|"dev_head：uclass_node 链入"| DEV1
+```
+
+**① 静态模板与运行时对象：指针关系**
+
+```text
+编译期就存在的静态模板（放在链接段，只读）
+==============================================================
+struct uclass_driver "serial"          struct driver "ns16550_serial"
+  .id   = UCLASS_SERIAL                  .id   = UCLASS_SERIAL
+  .ops / .post_probe / ...               .of_match / .probe / .ops
+  .per_device_auto_alloc_size            .priv_auto_alloc_size
+
+运行期由 calloc 创建的对象
+==============================================================
+struct uclass (UCLASS_SERIAL，全局唯一一份)
+  .priv
+  .uc_drv ────────────► struct uclass_driver "serial"
+  .dev_head ──────────► 本类设备链表头（见下面 ②）
+  .sibling_node ──────► 全局 uclass 链表（所有 uclass 串在一起）
+
+struct udevice "serial@ff1a0000"
+  .driver ────────────► struct driver "ns16550_serial"
+  .uclass ────────────► struct uclass (UCLASS_SERIAL)
+  .parent ────────────► struct udevice "root_driver"
+  .priv / .platdata / .uclass_priv / .parent_priv
+  .uclass_node ──────┐
+  .sibling_node ─────┤ 这两个 list_head 是“挂钩”，见 ② 和 ③
+  .child_head ───────┘
+```
+
+**② 链表一：`uclass->dev_head` 串起同类设备（节点用 `uclass_node`）**
+
+`dev_head` 是链表头；每台设备的 `uclass_node` 是链表节点。双向循环链表：`next` 往右，`prev` 往左，首尾回环。
+
+```text
+uclass(UCLASS_SERIAL)->dev_head
+        │ .next
+        ▼
++---------------------+ --next--> +---------------------+ --next--> +---------------------+
+| serial0.uclass_node |           | serial1.uclass_node |           | serial2.uclass_node |
++---------------------+ <--prev-- +---------------------+ <--prev-- +---------------------+
+   (udevice "serial0")              (udevice "serial1")              (udevice "serial2")
+
+首尾回环（双向循环）：
+  dev_head.next          ─► serial0.uclass_node
+  serial2.uclass_node.next ─► dev_head
+  dev_head.prev          ◄─ serial2.uclass_node
+  serial0.uclass_node.prev ◄─ dev_head
+
+每个 serialN.uclass_node 都是对应 udevice 结构体里的一个 list_head 成员，
+内核链表用 container_of() 从该成员反推出整个 udevice。
+```
+
+要点：**一个 uclass 的 `dev_head` 挂着所有同类设备；每台设备只用自己的 `uclass_node` 这一个字段入链。**
+
+- 同一份 `struct driver` 可以绑定出多个 `udevice`（例如同型号的两个 UART）。
+
+- 同一份 `struct uclass_driver` 对应唯一一个运行时 `struct uclass`，后者再管理该类下所有设备。
+
+#### 2.设备与父兄关系
+
+**③ 链表二：`parent->child_head` 串起兄弟设备（节点用 `sibling_node`）**
+
+`child_head` 是父设备的“孩子链表头”，每个孩子用自己的 `sibling_node` 入链。它同样是双向循环链表：
+
+```text
+udevice "root_driver"->child_head
+        │ .next
+        ▼
++----------------------+ --next--> +----------------------+ --next--> +----------------------+
+| serial0.sibling_node |           | i2c0.sibling_node    |           | mmc0.sibling_node    |
++----------------------+ <--prev-- +----------------------+ <--prev-- +----------------------+
+   (udevice "serial0")                (udevice "i2c0")                (udevice "mmc0")
+
+首尾回环（双向循环）：
+  child_head.next           ─► serial0.sibling_node
+  mmc0.sibling_node.next    ─► child_head
+  child_head.prev           ◄─ mmc0.sibling_node
+  serial0.sibling_node.prev ◄─ child_head
+
+每个 xxx.sibling_node 都是对应 udevice 里的 list_head 成员；
+父设备用 child_head 当链表头，所有孩子用 sibling_node 入链。
+```
+
+每个孩子的 `child_head` 又是下一条链表的头，于是递归成树：
+
+```text
+gd->dm_root
+   │ 指向
+   ▼
+udevice "root_driver" .child_head
+   │
+   ├─► [serial0.sibling_node]        udevice "serial@ff1a0000"
+   ├─► [i2c0.sibling_node]           udevice "i2c0"
+   │       │ .child_head
+   │       ├─► [pmic.sibling_node]   udevice "pmic"
+   │       └─► ...
+   └─► [mmc0.sibling_node]           udevice "mmc0"
+```
+
+**④ 关键：同一个 udevice 同时挂在两条链上**
+
+```text
+                        struct udevice "serial@ff1a0000"
+          ┌─ 父设备链 ──── .sibling_node  ◄── parent->child_head
+          ├─ .parent ───────────► struct udevice "root_driver"
+          ├─ 同类设备链 ── .uclass_node  ◄── uclass->dev_head
+          ├─ .uclass ───────────► struct uclass (UCLASS_SERIAL)
+          ├─ .driver ───────────► struct driver "ns16550_serial"
+          └─ .priv / .platdata / .uclass_priv / .parent_priv
+```
+
+- `.sibling_node` + `.parent` 管**父子树**：设备挂在哪条总线下。
+- `.uclass_node` + `.uclass` 管**同类分组**：设备归哪个类统一管理。
+- 两条链互不影响：一台设备可以同时在 `i2c0` 的孩子链里，又在 `UCLASS_PMIC` 的设备链里。
+
+**⑤ 合起来看：静态模板 → 运行时对象**
+
+```text
+struct uclass_driver "serial" ──.uc_drv──► struct uclass (UCLASS_SERIAL)
+                                                    │ .dev_head
+                                                    ▼
+struct driver "ns16550_serial" ──.driver─► udevice "serial@ff1a0000"
+                                                    │
+                                                    ├─ .uclass_node ──► 同类下一个设备
+                                                    ├─ .sibling_node ─► 下一个兄弟设备
+                                                    ├─ .parent ───────► root_driver
+                                                    └─ .driver ───────► ns16550_serial
+```
+
+- 同一份 `struct driver` 可以绑定出多个 `udevice`（例如同型号的两个 UART）。
+- 同一份 `struct uclass_driver` 对应唯一一个运行时 `struct uclass`，后者再管理该类下所有设备。
+- `root_driver` 是 `gd->dm_root` 指向的根设备，所有顶层设备的 `parent` 都是它。
+
+### 5.bind和probe 
+
+```text
+lists_bind_fdt()                        按 compatible 找到 struct driver
+  └─ device_bind_with_driver_data()
+       └─ device_bind_common()          device.c:107
+            ├─ calloc(struct udevice)   设备对象在这里诞生
+            ├─ dev->driver  = drv
+            ├─ dev->uclass  = uc        uclass_get() 取得/创建类分组
+            ├─ dev->parent  = parent
+            ├─ 分配 platdata / uclass_platdata / parent_platdata
+            ├─ sibling_node 挂入 parent->child_head
+            ├─ uclass_bind_device()     uclass_node 挂入 uc->dev_head
+            ├─ drv->bind()
+            ├─ parent->driver->child_post_bind()
+            └─ uc->uc_drv->post_bind()
+```
+
+```text
+device_probe()                           device.c:404
+  ├─ 分配 dev->priv           (driver.priv_auto_alloc_size)
+  ├─ 分配 dev->uclass_priv    (uc_drv.per_device_auto_alloc_size)
+  ├─ 分配 dev->parent_priv    (父设备 per_child_auto_alloc_size)
+  ├─ device_probe(parent)     递归，保证父设备先激活
+  ├─ uclass_resolve_seq()     分配 dev->seq
+  ├─ flags |= DM_FLAG_ACTIVATED
+  ├─ pinctrl_select_state("default")
+  ├─ uc_drv->pre_probe()
+  ├─ parent->driver->child_pre_probe()
+  ├─ drv->ofdata_to_platdata()  解析 DT -> platdata
+  ├─ drv->probe()               真正的硬件初始化
+  └─ uc_drv->post_probe()
+```
+
+一句话总结：
+
+- **`driver` / `uclass_driver` 是“说明书”**：编译期放在链接段里，DM 按名字或 `id` 查找。
+- **`uclass` 是“同类型设备的花名册”**：按 `uclass_id` 创建一份，`dev_head` 串起所有设备。
+- **`udevice` 是“具体设备档案”**：`driver` 指向说明书，`uclass` 指向花名册，`parent` 指向父设备，六个数据指针分别存放不同层级的配置和私有数据。
 
 ## 2.框架分层图
 
@@ -433,6 +790,74 @@ struct uclass {
 
 1. 从 `UCLASS_DRIVER()` 建立的静态列表中，按 `UCLASS_SERIAL` 找到串口类规则 `uc_drv`。
 2. 用 `calloc()` 分配一份 `struct uclass`，令 `uc->uc_drv = uc_drv`，初始化空的 `uc->dev_head`，并把 `uc` 加入 DM 的类链表。
+
+   ```c
+   /**
+    * uclass_add() - Create new uclass in list
+    * @id: Id number to create
+    * @ucp: Returns pointer to uclass, or NULL on error
+    * @return 0 on success, -ve on error
+    *
+    * The new uclass is added to the list. There must be only one uclass for
+    * each id.
+    */
+   static int uclass_add(enum uclass_id id, struct uclass **ucp)
+   {
+   	struct uclass_driver *uc_drv;
+   	struct uclass *uc;
+   	int ret;
+   
+   	*ucp = NULL;
+   	uc_drv = lists_uclass_lookup(id);
+   	if (!uc_drv) {
+   		debug("Cannot find uclass for id %d: please add the UCLASS_DRIVER() declaration for this UCLASS_... id\n",
+   		      id);
+   		/*
+   		 * Use a strange error to make this case easier to find. When
+   		 * a uclass is not available it can prevent driver model from
+   		 * starting up and this failure is otherwise hard to debug.
+   		 */
+   		return -EPFNOSUPPORT;
+   	}
+   	uc = calloc(1, sizeof(*uc));
+   	if (!uc)
+   		return -ENOMEM;
+   	if (uc_drv->priv_auto_alloc_size) {
+   		uc->priv = calloc(1, uc_drv->priv_auto_alloc_size);
+   		if (!uc->priv) {
+   			ret = -ENOMEM;
+   			goto fail_mem;
+   		}
+   	}
+   	uc->uc_drv = uc_drv;
+   #ifdef CONFIG_USING_KERNEL_DTB_V2
+   	uc->u_boot_dev_head = NULL;
+   #endif
+   	INIT_LIST_HEAD(&uc->sibling_node);
+   	INIT_LIST_HEAD(&uc->dev_head);
+   	list_add(&uc->sibling_node, &DM_UCLASS_ROOT_NON_CONST);//#define DM_UCLASS_ROOT_NON_CONST	(((gd_t *)gd)->uclass_root)就是把新创建的uc加入到gd的这份类列表中
+   
+   	if (uc_drv->init) {
+   		ret = uc_drv->init(uc);
+   		if (ret)
+   			goto fail;
+   	}
+   
+   	*ucp = uc;
+   
+   	return 0;
+   fail:
+   	if (uc_drv->priv_auto_alloc_size) {
+   		free(uc->priv);
+   		uc->priv = NULL;
+   	}
+   	list_del(&uc->sibling_node);
+   fail_mem:
+   	free(uc);
+   
+   	return ret;
+   }
+   ```
 3. 返回 `uc`。以后再调用 `uclass_get(UCLASS_SERIAL, &uc)`，直接取得已有的这份类对象。
 
 此时只是建好了“串口设备分组”，**还没有新建任何一台串口的 `udevice`**。接下来的 `device_bind_common()` 才用另一处 `calloc()` 分配 `struct udevice`，填写 `dev->driver` 和 `dev->uclass = uc`，并把设备加入对应链表。因此一个 `struct uclass` 可以管理多台串口设备。
