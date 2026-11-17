@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RK3506 DDR 内存分布</title>
+  <style>
+    :root { color-scheme: light; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; color: #17212b; background: #f4f6f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 980px; margin: 0 auto; padding: 28px 20px 48px; }
+    h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.3; }
+    .intro { margin: 0 0 22px; color: #52606d; font-size: 14px; }
+    .map { margin: 0; padding: 0; list-style: none; border: 1px solid #ccd5dd; background: white; }
+    .row { display: grid; grid-template-columns: 154px minmax(0, 1fr); min-height: 58px; border-bottom: 1px solid #dbe2e8; }
+    .row:last-child { border-bottom: 0; }
+    .address { display: flex; align-items: center; padding: 10px 14px; border-right: 1px solid #dbe2e8; font: 600 14px Consolas, monospace; white-space: nowrap; }
+    .detail { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 10px; padding: 10px 16px; min-width: 0; }
+    .detail strong { font-size: 15px; font-weight: 600; }
+    .detail span { color: #465360; font-size: 13px; }
+    .limit { background: #edf0f3; }
+    .unknown { background: #f9fafb; }
+    .spl { background: #dff4e7; }
+    .stack { background: #fff2d6; }
+    .load { background: #e8f3fb; }
+    .textbase { background: #e8effd; }
+    .note { margin: 18px 0 0; color: #52606d; font-size: 13px; line-height: 1.7; }
+    section { margin-top: 34px; }
+    h2 { margin: 0 0 8px; font-size: 20px; }
+    h3 { margin: 0 0 12px; font-size: 16px; }
+    .section-note { margin: 0 0 16px; color: #52606d; font-size: 14px; line-height: 1.6; }
+    .phase-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+    .phase { min-width: 0; }
+    .phase-list, .reserve-list { margin: 0; padding: 0; list-style: none; border-top: 2px solid #34495e; }
+    .phase-list li, .reserve-list li { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 10px; align-items: start; padding: 11px 12px; border-bottom: 1px solid #dbe2e8; background: white; }
+    .phase-list li:nth-child(even), .reserve-list li:nth-child(even) { background: #f9fafb; }
+    .phase-list code, .reserve-list code { font: 600 12px Consolas, monospace; color: #1b3f68; overflow-wrap: anywhere; }
+    .phase-list span, .reserve-list span { font-size: 13px; line-height: 1.55; }
+    .phase-list b, .reserve-list b { display: block; font-size: 14px; }
+    .formula { margin: 10px 0 0; padding: 10px 12px; background: #e8effd; font: 13px Consolas, monospace; overflow-wrap: anywhere; }
+    .reserve-list li { grid-template-columns: 38px minmax(0, 1fr); }
+    .step { font: 600 12px Consolas, monospace; color: #52606d; }
+    .source { margin-top: 22px; padding-top: 14px; border-top: 1px solid #ccd5dd; color: #52606d; font-size: 13px; line-height: 1.65; }
+    .boundaries { margin: 0; }
+    .boundary { display: grid; grid-template-columns: minmax(220px, 290px) minmax(35px, 1fr) minmax(135px, 230px); gap: 12px; align-items: center; min-height: 42px; }
+    .pointer { color: #173b5e; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+    .pointer::after { content: "  →"; color: #d97706; font-size: 19px; }
+    .rule { height: 0; border-top: 2px solid #d97706; position: relative; }
+    .rule::after { content: ""; position: absolute; right: -1px; top: -5px; width: 0; height: 0; border-top: 4px solid transparent; border-bottom: 4px solid transparent; border-left: 7px solid #d97706; }
+    .addr { justify-self: end; color: #13212e; font: 600 13px Consolas, monospace; overflow-wrap: anywhere; text-align: right; }
+    .region-band { display: flex; align-items: center; gap: 10px; min-height: 46px; margin: 0 0 0 302px; padding: 7px 12px; border-left: 4px solid #16a34a; background: #e7f5eb; font-size: 13px; }
+    .region-band b { font-size: 14px; }
+    .region-band.blue { border-color: #0284c7; background: #e8f3fb; }
+    .region-band.amber { border-color: #d97706; background: #fff2d6; }
+    .region-band.gray { border-color: #9ca3af; background: #eef0f2; }
+    .boundary-note { margin: 12px 0 0; color: #52606d; font-size: 13px; line-height: 1.65; }
+    details.address-index { margin-top: 32px; }
+    details.address-index summary { cursor: pointer; font-weight: 600; font-size: 17px; margin-bottom: 12px; }
+    @media (max-width: 600px) {
+      main { padding: 20px 12px 32px; }
+      h1 { font-size: 21px; }
+      .row { grid-template-columns: 1fr; }
+      .address { border-right: 0; padding-bottom: 2px; }
+      .detail { padding-top: 2px; padding-bottom: 12px; }
+      .phase-grid { grid-template-columns: 1fr; }
+      .boundary { grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; padding-top: 7px; }
+      .pointer::after { content: " ↓"; }
+      .rule { grid-column: 1 / -1; grid-row: 2; }
+      .region-band { margin-left: 0; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>RK3506 DDR 内存分布</h1>
+    <p class="intro">宏名与指针名指向右侧的地址分界线；相邻两条线之间是对应区域。高地址在上，图不按地址跨度等比例绘制。</p>
+    <section aria-labelledby="spl-boundary-title">
+      <h2 id="spl-boundary-title">SPL：固定边界与早期预留</h2>
+      <div class="boundaries" aria-label="SPL 的内存区域，从高地址到低地址">
+        <div class="boundary"><span class="pointer">CONFIG_SPL_BSS_START_ADDR<br>+ CONFIG_SPL_BSS_MAX_SIZE</span><span class="rule"></span><code class="addr">0x04000000（上限，不含）</code></div>
+        <div class="region-band"><b>SPL BSS</b><span>最多 0x20000（128 KiB）；实际结束指针 __bss_end 需由构建产物确认</span></div>
+        <div class="boundary"><span class="pointer">CONFIG_SPL_BSS_START_ADDR</span><span class="rule"></span><code class="addr">0x03FE0000</code></div>
+        <div class="region-band gray"><b>未由这些宏指定</b><span>0xA0000（640 KiB）</span></div>
+        <div class="boundary"><span class="pointer">CONFIG_SPL_TEXT_BASE + CONFIG_SPL_MAX_SIZE</span><span class="rule"></span><code class="addr">0x03F40000</code></div>
+        <div class="region-band"><b>SPL 镜像</b><span>最多 0x40000（256 KiB），实际镜像末端需 map 确认</span></div>
+        <div class="boundary"><span class="pointer">CONFIG_SPL_TEXT_BASE<br>CONFIG_SPL_STACK / 初始 top</span><span class="rule"></span><code class="addr">0x03F00000</code></div>
+        <div class="region-band blue"><b>早期 malloc</b><span>1 MiB，向低地址划出</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;malloc_base<br>top - CONFIG_SPL_SYS_MALLOC_F_LEN</span><span class="rule"></span><code class="addr">0x03E00000</code></div>
+        <div class="region-band amber"><b>临时 gd</b><span>sizeof(gd_t) 加对齐空隙</span></div>
+        <div class="boundary"><span class="pointer">gd / r9 / sp（alloc 返回后）</span><span class="rule"></span><code class="addr">G_SPL</code></div>
+        <div class="region-band gray"><b>实际栈</b><span>从 G_SPL 向低地址增长，下界未固定</span></div>
+      </div>
+      <p class="formula">G_SPL = align_down(0x03E00000 - sizeof(gd_t), 16)<br>gd-&gt;malloc_base = G_SPL + align_up(sizeof(gd_t), 16) = 0x03E00000</p>
+      <p class="boundary-note">G_SPL 是 <code>board_init_f_alloc_reserve()</code> 的返回地址，同时成为 <code>r9</code> 和新的 <code>sp</code>。本 SDK 没有对应构建产物中的 <code>sizeof(gd_t)</code>，不能把 G_SPL 写成未经验证的十六进制数。</p>
+    </section>
+
+    <section aria-labelledby="ub-boundary-title">
+      <h2 id="ub-boundary-title">U-Boot proper：进入 board_init_f 前</h2>
+      <div class="boundaries" aria-label="普通 U-Boot 进入 board_init_f 前的内存区域">
+        <div class="boundary"><span class="pointer">CONFIG_SYS_INIT_SP_ADDR / 初始 top</span><span class="rule"></span><code class="addr">0x00600000</code></div>
+        <div class="region-band blue"><b>早期 malloc</b><span>1 MiB，与重定位后的正式 malloc 不同</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;malloc_base<br>top - CONFIG_SYS_MALLOC_F_LEN</span><span class="rule"></span><code class="addr">0x00500000</code></div>
+        <div class="region-band amber"><b>临时 gd</b><span>sizeof(gd_t) 加对齐空隙</span></div>
+        <div class="boundary"><span class="pointer">gd / r9 / sp（alloc 返回后）</span><span class="rule"></span><code class="addr">G_UB</code></div>
+        <div class="region-band gray"><b>实际栈</b><span>从 G_UB 向低地址增长，下界未固定</span></div>
+      </div>
+      <p class="formula">G_UB = align_down(0x00500000 - sizeof(gd_t), 16)<br>gd-&gt;malloc_base = G_UB + align_up(sizeof(gd_t), 16) = 0x00500000</p>
+      <p class="boundary-note">另一个固定标记是 <code>CONFIG_SYS_TEXT_BASE → 0x00200000</code>，它是普通 U-Boot 镜像的链接起点，不是上述早期栈区的下界。</p>
+    </section>
+
+    <section aria-labelledby="atags-title">
+      <h2 id="atags-title">Rockchip ATAGS：启动阶段交接区</h2>
+      <div class="boundaries" aria-label="ATAGS 的起止地址与占用区">
+        <div class="boundary"><span class="pointer">CONFIG_SYS_SDRAM_BASE + ATAGS_OFFSET + ATAGS_SIZE<br>fdt_addr_r</span><span class="rule"></span><code class="addr">0x00063000（结束，不含）</code></div>
+        <div class="region-band amber"><b>ATAGS 交接区</b><span>0x00062000–0x00062FFF，4 KiB；存放前级传给 SPL/U-Boot 的标签数据</span></div>
+        <div class="boundary"><span class="pointer">ATAGS_PHYS_BASE<br>= CONFIG_SYS_SDRAM_BASE + ATAGS_OFFSET</span><span class="rule"></span><code class="addr">0x00062000（起始）</code></div>
+      </div>
+      <p class="boundary-note"><code>fdt_addr_r</code> 是设备树的建议加载起点，地址数值刚好是 ATAGS 区结束地址；它本身不属于 ATAGS 区。</p>
+    </section>
+
+    <details class="address-index">
+      <summary>其它地址标记与配置索引</summary>
+    <ol class="map" aria-label="DDR 地址分布">
+      <li class="row limit"><div class="address">0xC0000000</div><div class="detail"><strong>SDRAM_MAX_SIZE 上限：3 GiB</strong><span>实际 DDR 容量未知</span></div></li>
+      <li class="row unknown"><div class="address">0x04000000 以上</div><div class="detail"><strong>DDR 其余空间</strong><span>U-Boot 重定位后的地址需运行时确认</span></div></li>
+      <li class="row spl"><div class="address">0x03FE0000–<br>0x03FFFFFF</div><div class="detail"><strong>SPL BSS</strong><span>最大 0x20000，128 KiB</span></div></li>
+      <li class="row unknown"><div class="address">0x03F40000–<br>0x03FDFFFF</div><div class="detail"><strong>配置未指定用途的间隔</strong><span>640 KiB</span></div></li>
+      <li class="row spl"><div class="address">0x03F00000–<br>0x03F3FFFF</div><div class="detail"><strong>SPL 镜像区域</strong><span>最大 0x40000，256 KiB</span></div></li>
+      <li class="row load"><div class="address">0x03E00000–<br>0x03EFFFFF</div><div class="detail"><strong>SPL 早期 malloc</strong><span>1 MiB；位于 SPL 镜像下方</span></div></li>
+      <li class="row stack"><div class="address">G_SPL 以下</div><div class="detail"><strong>SPL 实际初始栈</strong><span>gd 位于 0x03E00000 下方；sp 从 gd 底部向低地址增长</span></div></li>
+      <li class="row load"><div class="address">0x01800000</div><div class="detail"><strong>ramdisk_addr_r</strong><span>内存盘建议加载起点</span></div></li>
+      <li class="row load"><div class="address">0x00500000–<br>0x005FFFFF</div><div class="detail"><strong>U-Boot proper 早期 malloc</strong><span>1 MiB；原始栈顶是 0x00600000</span></div></li>
+      <li class="row stack"><div class="address">G_UB 以下</div><div class="detail"><strong>U-Boot proper 实际初始栈</strong><span>gd 位于 0x00500000 下方；sp 从 gd 底部向低地址增长</span></div></li>
+      <li class="row textbase"><div class="address">0x00200000</div><div class="detail"><strong>CONFIG_SYS_TEXT_BASE</strong><span>U-Boot proper 链接起点</span></div></li>
+      <li class="row load"><div class="address">0x00108000</div><div class="detail"><strong>kernel_addr_r</strong><span>内核建议加载起点</span></div></li>
+      <li class="row load"><div class="address">0x00063000</div><div class="detail"><strong>fdt_addr_r</strong><span>设备树建议加载起点</span></div></li>
+      <li class="row stack"><div class="address">0x00062000–<br>0x00062FFF</div><div class="detail"><strong>Rockchip ATAGS 交接区</strong><span>ATAGS_PHYS_BASE = CONFIG_SYS_SDRAM_BASE + ATAGS_OFFSET；ATAGS_SIZE = 0x1000</span></div></li>
+      <li class="row load"><div class="address">0x00008000</div><div class="detail"><strong>CONFIG_SYS_LOAD_ADDR</strong><span>默认文件加载地址，可由命令覆盖</span></div></li>
+      <li class="row limit"><div class="address">0x00000000</div><div class="detail"><strong>CONFIG_SYS_SDRAM_BASE</strong><span>DDR 起始地址</span></div></li>
+    </ol>
+    <p class="note">内核、设备树、内存盘地址是启动命令使用的加载起点。SPL 与普通 U-Boot 是先后阶段，部分 DDR 地址可能被后续阶段复用。</p>
+    </details>
+
+    <section aria-labelledby="early-title">
+      <h2 id="early-title">进入 board_init_f 前</h2>
+      <p class="section-note"><code>crt0.S</code> 先把 <code>sp</code> 放到配置给出的地址，再调用 <code>board_init_f_alloc_reserve(top)</code>。该函数从高到低预留早期 malloc 和 gd，返回 gd 起点；汇编随后把 <code>sp</code> 与 <code>r9</code> 都设为这个返回值。</p>
+      <div class="phase-grid">
+        <div class="phase">
+          <h3>SPL：top = 0x03F00000</h3>
+          <ol class="phase-list">
+            <li><code>0x03F00000</code><span><b>原始栈顶</b>同时是 SPL 镜像的起始边界；此时尚未分配 gd。</span></li>
+            <li><code>0x03E00000–0x03EFFFFF</code><span><b>早期 malloc，1 MiB</b><code>CONFIG_SPL_SYS_MALLOC_F_LEN</code> 默认继承 <code>CONFIG_SYS_MALLOC_F_LEN=0x100000</code>。</span></li>
+            <li><code>G_SPL–0x03DFFFFF</code><span><b>临时 gd，向下按 16 字节对齐</b><code>board_init_f_init_reserve</code> 只把 gd 清零，并记录早期 malloc 起点。</span></li>
+            <li><code>G_SPL 以下</code><span><b>实际栈，继续向低地址增长</b>栈长度不是由上述宏固定预留的。</span></li>
+          </ol>
+          <p class="formula">G_SPL = align_down(0x03E00000 - sizeof(gd_t), 16)</p>
+        </div>
+        <div class="phase">
+          <h3>U-Boot proper：top = 0x00600000</h3>
+          <ol class="phase-list">
+            <li><code>0x00600000</code><span><b>原始栈顶</b>来自 <code>CONFIG_SYS_INIT_SP_ADDR</code>。</span></li>
+            <li><code>0x00500000–0x005FFFFF</code><span><b>早期 malloc，1 MiB</b>来自 <code>CONFIG_SYS_MALLOC_F_LEN=0x100000</code>；不是后面的 16 MiB malloc。</span></li>
+            <li><code>G_UB–0x004FFFFF</code><span><b>临时 gd，向下按 16 字节对齐</b>地址由本次编译的 <code>sizeof(gd_t)</code> 决定。</span></li>
+            <li><code>G_UB 以下</code><span><b>实际栈，继续向低地址增长</b><code>board_init_f</code> 在这套早期栈和 gd 上运行。</span></li>
+          </ol>
+          <p class="formula">G_UB = align_down(0x00500000 - sizeof(gd_t), 16)</p>
+        </div>
+      </div>
+      <p class="note">SPL 使用 Rockchip 自己的 <code>board_init_f</code>；普通 U-Boot 使用 <code>common/board_f.c</code> 的重定位预留序列。当前 defconfig 没有启用 <code>CONFIG_SPL_STACK_R</code>，因此 SPL 后续通常继续用原来的 gd 和栈。</p>
+    </section>
+
+    <section aria-labelledby="reloc-title">
+      <h2 id="reloc-title">普通 U-Boot 重定位预留</h2>
+      <p class="section-note">下面是 <code>board_init_f</code> 在 <code>gd-&gt;ram_top</code> 附近从高到低的顺序。位置由实际 DDR 容量、镜像长度和运行时设备决定，不能仅靠头文件写成固定地址。</p>
+      <div class="boundaries" aria-label="普通 U-Boot 重定位时的边界指针和占用区">
+        <div class="boundary"><span class="pointer">gd-&gt;ram_top</span><span class="rule"></span><code class="addr">T</code></div>
+        <div class="region-band amber"><b>PRAM</b><span>默认 6144 KiB；环境变量 pram 可覆盖</span></div>
+        <div class="boundary"><span class="pointer">reserve_pram() 结束</span><span class="rule"></span><code class="addr">P = T - (pram_KiB × 1024)</code></div>
+        <div class="region-band gray"><b>对齐、MMU 页表</b><span>4 KiB 对齐；页表 16 KiB，再按 64 KiB 对齐</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;arch.tlb_addr</span><span class="rule"></span><code class="addr">Q</code></div>
+        <div class="region-band gray"><b>显示缓冲 / trace</b><span>大小按配置和运行时决定</span></div>
+        <div class="boundary"><span class="pointer">video_reserve() 等结束</span><span class="rule"></span><code class="addr">V</code></div>
+        <div class="region-band blue"><b>重定位 U-Boot 镜像</b><span>gd-&gt;mon_len，加 4 KiB 对齐空隙</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;relocaddr</span><span class="rule"></span><code class="addr">R = align_down(V - mon_len, 4 KiB)</code></div>
+        <div class="region-band blue"><b>正式 malloc</b><span>TOTAL_MALLOC_LEN，通常以 16 MiB 为主体</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;start_addr_sp（reserve_malloc 后）</span><span class="rule"></span><code class="addr">M = R - TOTAL_MALLOC_LEN</code></div>
+        <div class="region-band gray"><b>对齐空隙</b><span>最多 1 MiB</span></div>
+        <div class="boundary"><span class="pointer">reserve_noncached(): end</span><span class="rule"></span><code class="addr">E = align_up(M, 1 MiB) - 1 MiB</code></div>
+        <div class="region-band blue"><b>非缓存区</b><span>1 MiB</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;start_addr_sp（reserve_noncached 后）</span><span class="rule"></span><code class="addr">N = E - 1 MiB</code></div>
+        <div class="region-band amber"><b>bd_t</b><span>如果 gd-&gt;bd 还没有地址</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;bd</span><span class="rule"></span><code class="addr">B = N - sizeof(bd_t)</code></div>
+        <div class="region-band amber"><b>搬迁后的 gd_t</b><span>用于重定位后继续运行</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;new_gd</span><span class="rule"></span><code class="addr">D = B - sizeof(gd_t)</code></div>
+        <div class="region-band blue"><b>搬迁后的 FDT</b><span>仅 gd-&gt;fdt_blob 存在且未 OF_EMBED 时预留</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;new_fdt（有 FDT 时）</span><span class="rule"></span><code class="addr">F = align_down(D - fdt_size - 8, 8)</code></div>
+        <div class="region-band gray"><b>可选 bootstage / 对齐 / 异常栈</b><span>大小依配置而变</span></div>
+        <div class="boundary"><span class="pointer">gd-&gt;start_addr_sp → crt0.S 的 sp</span><span class="rule"></span><code class="addr">SP_final（运行时）</code></div>
+      </div>
+      <p class="formula">T = min(实际 DDR 可用顶部, 0xC0000000)<br>Q = align_down(align_down(P, 4 KiB) - 16 KiB, 64 KiB)（启用 MMU 页表预留时）<br>fdt_size = align_up(fdt_totalsize(gd-&gt;fdt_blob) + fdt_totalsize(可选内核 FDT) + 0x1000, 32)<br>SP_final = align_down(前序预留结束地址 - 16, 16) - 异常栈预留量</p>
+      <ol class="reserve-list">
+        <li><span class="step">01</span><span><b>T = min(实际可用 RAM 顶部, 0xC0000000)</b>Rockchip 的 <code>board_get_usable_ram_top</code> 将其限制在 <code>SDRAM_MAX_SIZE</code> 以内。</span></li>
+        <li><span class="step">02</span><span><b>PRAM：默认 6 MiB</b><code>CONFIG_PRAM=6144</code>，单位 KiB；运行时环境变量 <code>pram</code> 可覆盖，接着向下对齐 4 KiB。</span></li>
+        <li><span class="step">03</span><span><b>MMU 页表：16 KiB，随后向下对齐 64 KiB</b>当前 ARMv7 未启用 LPAE；若 I-cache 和 D-cache 都关闭，则跳过该预留。</span></li>
+        <li><span class="step">04</span><span><b>显示缓冲及 trace：按配置和运行时需求</b>该 defconfig 启用了 DM_VIDEO，因此显示缓冲大小不能从这两个宏文件推定。</span></li>
+        <li><span class="step">05</span><span><b>重定位后的 U-Boot 镜像</b>扣除 <code>gd-&gt;mon_len = __bss_end - _start</code>，再向下对齐 4 KiB；此地址成为 <code>gd-&gt;relocaddr</code>。</span></li>
+        <li><span class="step">06</span><span><b>正式 malloc 区</b>扣除 <code>TOTAL_MALLOC_LEN</code>，通常以 <code>CONFIG_SYS_MALLOC_LEN=16 MiB</code> 为主体；与早期 1 MiB 区不同。</span></li>
+        <li><span class="step">07</span><span><b>非缓存内存：1 MiB，另有对齐空隙</b><code>CONFIG_SYS_NONCACHED_MEMORY</code>；ARMv7 非 LPAE 的对齐粒度为 1 MiB。</span></li>
+        <li><span class="step">08</span><span><b>bd_t、搬迁后的 gd_t、设备树及可选 bootstage</b>这些区域继续从 <code>gd-&gt;start_addr_sp</code> 向低地址依次分配；设备树大小取决于实际 blob。</span></li>
+        <li><span class="step">09</span><span><b>最终栈顶</b>先向下按 16 字节对齐；ARM 在 IRQ 关闭时再留 16 字节异常栈空间，启用 IRQ 时通常留 8192 字节。随后 <code>crt0.S</code> 切换到新 <code>sp</code> 和新 gd。</span></li>
+      </ol>
+      <p class="note"><code>board_init_f_init_reserve</code> 初始化的是最早的临时 gd；<code>reserve_global_data</code> 在重定位区另留一份，<code>setup_reloc</code> 才把临时 gd 复制过去。</p>
+    </section>
+
+    <p class="source">精确的 <code>sizeof(gd_t)</code>、SPL BSS 实际结束地址、镜像长度和重定位地址，需要对应构建产物的 <code>.config</code>、map 文件，以及设备上 U-Boot 的 <code>bdinfo</code> 或启动日志。当前图采用所给 SDK 的 <code>rk3506_defconfig</code> 与 <code>rk3506_common.h</code>；TPL 不在本图分析范围内。</p>
+  </main>
+</body>
+</html>

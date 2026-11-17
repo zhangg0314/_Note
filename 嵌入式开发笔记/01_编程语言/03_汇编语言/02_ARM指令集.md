@@ -650,15 +650,104 @@ _start
 .globl  save_boot_params
 .align  4
 save_boot_params:
-bx  lr
+	bx  lr
 
 @ENDPROC(save_boot_params)展开后如下：
 
 .type save_boot_params STT_FUNC
-.size save_boot_params, .-save_boot_params
+.size save_boot_params, .-save_boot_params @ . 是当前位置，所以 .-save_boot_params 就是从函数入口到当前位置的长度
+
+
+ENTRY(save_boot_params)
+mov r1,r2
+ENDPROC(save_boot_params)
 ```
 
 ------
+
+. = 0x00000000;
+
+​	. = ALIGN(4);
+ .text :
+ {
+ 	*(.__image_copy_start)
+ 	*(.vectors)
+ 	CPUDIR/start.o (.text*)
+ 	*(.text*)
+ }
+
+这是 **链接脚本**，规定 U-Boot 的代码段从什么地址开始，以及各部分按什么顺序排列：
+
+```
+. = 0x00000000;             /* 链接地址从 0 开始 */
+. = ALIGN(4);               /* 调整到 4 字节边界 */
+.text :
+{
+    *(.__image_copy_start)  /* 镜像复制范围的起始标记 */
+    *(.vectors)             /* 异常向量表 */
+    CPUDIR/start.o (.text*) /* CPU 启动代码 */
+    *(.text*)               /* 其余代码 */
+}
+```
+
+这里最关键的是**排列顺序**：先放起始标记，再放异常向量表，接着是 `start.o` 的代码，最后才是其他代码。因此前面设置 `VBAR = _start` 时，`_start` 能否作为向量表入口，就要看它在 `.vectors` 中的具体定义。
+
+`. = 0` 设置的是**链接时使用的地址**，不代表芯片一定把镜像实际加载到物理地址 `0`。如果实际加载地址不同，前面看到的重定位代码就负责处理地址差异。
+
+另外，这里的链接脚本 `ALIGN(4)` 是**按 4 字节对齐**；它和上一条汇编代码中的 `.align 4` 不是同一种写法，不要把两者的参数含义混在一起。
+
+```
+  Worked for 15s • 09:19
+```
+
+重点分析‘.’表示啥
+
+这里的 **单独一个 `.` 是链接器的“当前位置”**：可以理解为链接器准备放入下一段内容的地址。
+
+```
+. = 0x00000000;   /* 把当前位置设为 0 */
+. = ALIGN(4);     /* 把当前位置向上调整到 4 字节边界 */
+.text : { ... }   /* 从当前位置开始放置 .text 的内容 */
+```
+
+链接器每放入一段内容，当前位置就向后移动。例如从 `0` 开始，放入 32 字节向量表后，`.` 就到了 `0x20`；再放入 100 字节代码后，就到了 `0x84`（中间若有对齐要求，还可能插入填充）。
+
+注意区分：
+
+- **`. = ...`** 中的 `.`：当前位置，可以读取或设置。
+- **`.text`、`.vectors`、`.__image_copy_start`** 开头的点：只是**段名的一部分**，不是当前位置。
+
+所以这段脚本的核心意思是：**把放置位置设为 0，对齐后，从那里依次排列各个段。**
+
+```
+  Worked for 14s • 09:20
+```
+
+*(.__image_copy_start)
+ 	*(.vectors)的*（）是啥
+
+在链接脚本里，`*(...)` 的意思是：**从所有输入文件中，选出括号里指定的段，放到这里。**
+
+```
+*(.__image_copy_start)
+*(.vectors)
+```
+
+拆开看：
+
+- `*`：匹配所有输入文件，例如各个 `.o` 文件。
+- `(...)`：指定要取这些文件里的哪些段。
+- `.__image_copy_start`、`.vectors`：输入段的名字。
+
+所以 `*(.vectors)` 就是“把各个目标文件中的 `.vectors` 段放到当前位置”。
+
+你也可以和下一行对照：
+
+```
+CPUDIR/start.o (.text*)
+```
+
+它只选 **`CPUDIR/start.o` 这个文件**中的 `.text*` 段；而 `*(.text*)` 则选**所有输入文件**中的 `.text*` 段。括号里的 `*` 又是通配符：`.text*` 能匹配 `.text`、`.text.start` 等段名。
 
 # 参考链接
 
