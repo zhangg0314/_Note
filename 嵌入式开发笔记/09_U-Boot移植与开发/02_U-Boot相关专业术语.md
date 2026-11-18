@@ -267,17 +267,21 @@ BootROM → loader(带DDR init) → trust.img → uboot → kernel
 
 # U-Boot DM
 
+[uboot 设备驱动模型 - YYFaGe - 博客园](https://www.cnblogs.com/YYFaGe/p/16672483.html)
+
 ## 1.基本概念
 
-DM (Driver Model) 是 U-Boot 标准的 device-driver 开发模型，跟 kernel 的 device-driver 模型非常类似。整个DM框架的三个核心对象如下：
+DM (Driver Model) 是 U-Boot 标准的 device-driver 开发模型，跟 kernel 的 device-driver 模型非常类似。整个DM框架就三个核心对象如下：
 
 | 对象      | 含义                                                         | 例子                           |
 | --------- | ------------------------------------------------------------ | ------------------------------ |
-| `uclass`  | 运行时管理同类设备的对象，保存类规则指针和设备链表           | enum uclass_id；id与类一一对应 |
+| `uclass`  | 运行时管理同类设备的对象，保存类规则指针和设备链表。         | enum uclass_id；id与类唯一对应 |
 | `driver`  | 包含设备树匹配表，所属的uclass id、probe 和硬件操作ops，由`U_BOOT_DRIVER()` 定义为全局驱动记录 | `led_gpio`                     |
 | `udevice` | 一台具体设备的运行时实例，记录其驱动、uclass、父设备、设备树节点等 | RK3506 的 `uart0`              |
 
-## 2.结构体源码分析
+<img src="..\..\嵌入式开发笔记\figure\2285310-20220915102312994-72783487.png" alt="img" style="zoom:200%;" />
+
+## 2.结构体分析
 
 | 结构体                 | 本质                     | 数量                        | 存放位置                |
 | ---------------------- | ------------------------ | --------------------------- | ----------------------- |
@@ -290,11 +294,12 @@ DM (Driver Model) 是 U-Boot 标准的 device-driver 开发模型，跟 kernel �
 driver/uclass_driver是编译期模板，uclass/udevice是运行期对象。
 ```
 
-### 1.设备实例
+### 1.udevice
 
-源码：`include/dm/device.h`
+一个udevice 代表一个设备，uboot会从设备树中读取设备树节点信息，每个节点都生成一个udevice。也可以用宏**U_BOOT_DEVICE**来定义一个设备。
 
 ```c
+//include/dm/device.h
 struct udevice {
     const struct driver *driver;   /* 指向静态驱动模板 */
     const char *name;              /* 设备名，通常是设备树节点名 */
@@ -305,12 +310,12 @@ struct udevice {
     ulong driver_data;             /* of_match 匹配到的 data */
     struct udevice *parent;        /* 父设备，根设备为 NULL */
     void *priv;                    /* 驱动私有数据 */
-    struct uclass *uclass;         /* 所属的 uclass */
+    struct uclass *uclass;         /* 驱动所属的uclass */
     void *uclass_priv;             /* uclass 给本设备保存的私有数据 */
     void *parent_priv;             /* 父设备给本设备保存的私有数据 */
-    struct list_head uclass_node;  /* 挂入 uclass->dev_head */
-    struct list_head child_head;   /* 本设备的孩子链表头 */
-    struct list_head sibling_node; /* 挂入 parent->child_head */
+    struct list_head uclass_node;  /* 连接在struct uclass的dev_head后面 */
+    struct list_head child_head;   /* 子设备连接在这里 */
+    struct list_head sibling_node; /* 连接到父设备的child_head后面 */
     uint32_t flags;                /* DM_FLAG_... */
     int req_seq;                   /* alias 请求的序号，-1 表示任意 */
     int seq;                       /* probe 时解析出的唯一序号 */
