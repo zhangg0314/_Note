@@ -259,6 +259,62 @@ STMDB R11!,{R1-R4}
 ```
 
 ------
+## 4.U-Boot重定位
+
+```asm
+ENDPROC(relocate_vectors)
+
+/*
+ * void relocate_code(addr_moni)
+ *
+ * This function relocates the monitor code.
+ *
+ * NOTE:
+ * To prevent the code below from containing references with an R_ARM_ABS32
+ * relocation record type, we never refer to linker-defined symbols directly.
+ * Instead, we declare literals which contain their relative location with
+ * respect to relocate_code, and at run time, add relocate_code back to them.
+ */
+
+ENTRY(relocate_code)
+	ldr	r1, =__image_copy_start	/* r1 <- SRC &__image_copy_start */
+	subs	r4, r0, r1		/* r4 <- relocation offset */
+	beq	relocate_done		/* skip relocation */
+	ldr	r2, =__image_copy_end	/* r2 <- SRC &__image_copy_end */
+
+copy_loop:
+	ldmia	r1!, {r10-r11}		/* copy from source address [r1]    */
+	stmia	r0!, {r10-r11}		/* copy to   target address [r0]    */
+	cmp	r1, r2			/* until source end address [r2]    */
+	blo	copy_loop
+
+	/*
+	 * fix .rel.dyn relocations
+	 */
+	ldr	r2, =__rel_dyn_start	/* r2 <- SRC &__rel_dyn_start */
+	ldr	r3, =__rel_dyn_end	/* r3 <- SRC &__rel_dyn_end */
+fixloop:
+	ldmia	r2!, {r0-r1}		/* (r0,r1) <- (SRC location,fixup) */
+	and	r1, r1, #0xff
+	cmp	r1, #R_ARM_RELATIVE
+	bne	fixnext
+
+	/* relative fix: increase location by offset */
+	/* fixloop 遍历 .rel.dyn 重定位表。
+	   遇到 R_ARM_RELATIVE，先把“需要修改的位置”加上 r4，
+	   再把那个位置存放的地址值也加上 r4。这样复制后的代码仍能指向复制后的数据。
+	*/
+	@例如代码从 0x1000 搬到 0x8000，差值是 0x7000。原来位于 0x1100 的一个指针，内容为 0x1200；重定位后，会在 0x8100 处把它改成 0x8200。
+	add	r0, r0, r4
+	ldr	r1, [r0]
+	add	r1, r1, r4
+	str	r1, [r0]
+fixnext:
+	cmp	r2, r3
+	blo	fixloop
+
+relocate_done:
+```
 
 # ARM中的栈
 
