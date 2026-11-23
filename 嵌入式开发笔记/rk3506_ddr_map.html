@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RK3506 SPL 与 U-Boot DDR 内存分布</title>
+  <style>
+    :root { color-scheme: light; font-family: "Microsoft YaHei", "Segoe UI", sans-serif; color: #202a31; background: #f5f7f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { padding: 24px max(18px, calc((100vw - 1120px) / 2)); background: #123b43; color: white; }
+    h1 { margin: 0; font-size: 24px; font-weight: 650; }
+    header p { margin: 8px 0 0; color: #c6d9db; font-size: 13px; }
+    main { max-width: 1120px; margin: auto; padding: 20px 18px 48px; }
+    h2 { font-size: 18px; margin: 28px 0 12px; }
+    h3 { font-size: 15px; margin: 0 0 10px; }
+    p { line-height: 1.6; }
+    .timeline { display: grid; grid-template-columns: 72px minmax(0, 1fr) minmax(180px, 31%); gap: 2px; background: #d9e0e3; border: 1px solid #d9e0e3; }
+    .timeline > div { padding: 10px 12px; background: #fff; font-size: 13px; line-height: 1.5; }
+    .timeline .step { font-weight: 700; color: #12616a; text-align: center; background: #e6f0f1; }
+    .timeline .value { font-family: Consolas, "Microsoft YaHei", monospace; background: #f0f5f6; overflow-wrap: anywhere; }
+    .timeline code { font-family: Consolas, monospace; font-size: 12px; }
+    .sequence-note { color: #53616a; font-size: 13px; margin: 7px 0 14px; }
+    .legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 14px 0; font-size: 12px; color: #53616a; }
+    .legend i { display: inline-block; width: 11px; height: 11px; margin-right: 5px; vertical-align: -1px; }
+    .map { display: grid; grid-template-columns: minmax(215px, 29%) 1fr; gap: 2px; background: #d9e0e3; border: 1px solid #d9e0e3; }
+    .map .addr, .map .region { padding: 11px 13px; background: #fff; min-height: 49px; line-height: 1.45; }
+    .map .addr { display: flex; flex-direction: column; justify-content: center; gap: 3px; border-left: 3px solid #c5782a; color: #294351; overflow-wrap: anywhere; }
+    .map .addr .marker { font-size: 12px; font-weight: 650; }
+    .map .addr .marker::before { content: "→ "; color: #c5782a; }
+    .map .addr code { font: 12px/1.4 Consolas, "Microsoft YaHei", monospace; color: #52616a; }
+    .map .region { font-size: 13px; }
+    .map .region strong { color: #142b34; }
+    .map .region small { display: block; margin-top: 3px; color: #53616a; font-size: 12px; }
+    .map .spl { border-left: 4px solid #278365; }
+    .map .uboot { border-left: 4px solid #267eb1; }
+    .map .handoff { border-left: 4px solid #c5782a; }
+    .map .calc { border-left: 4px solid #815bb1; }
+    .note { margin: 13px 0 0; padding: 12px 14px; background: #fff0db; border-left: 4px solid #c5782a; font-size: 13px; }
+    .formula { font-family: Consolas, "Microsoft YaHei", monospace; font-size: 12px; overflow-wrap: anywhere; }
+    footer { font-size: 12px; color: #5a6870; margin-top: 24px; line-height: 1.6; }
+    @media (max-width: 600px) { h1 { font-size: 20px; } .map { grid-template-columns: minmax(126px, 38%) 1fr; } .map .addr, .map .region { padding: 9px; } .timeline { grid-template-columns: 46px minmax(0, 1fr); } .timeline .value { grid-column: 2; padding-top: 3px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>RK3506 的 DDR 内存分布</h1>
+    <p>SPL 与 U-Boot 本体 · 从初始化到重定位 · 区域按地址顺序排列，不按比例缩放</p>
+  </header>
+  <main>
+    <h2>先看执行顺序：SPL 的 sp 怎样变化</h2>
+    <p class="sequence-note">前提：闭源 TPL 已初始化 DDR，并把 SPL 装入 0x03f00000。下面按 crt0.S 中的指令先后排列，箭头方向为时间顺序。</p>
+    <div class="timeline" aria-label="SPL 初始化执行顺序">
+      <div class="step">① ↓</div><div>进入 <code>_main</code>：<code>ldr r0, =CONFIG_SPL_STACK</code>，接着 <code>mov sp, r0</code>。</div><div class="value">此刻 sp = 0x03f00000<br>r9 尚未指向新 GD</div>
+      <div class="step">② ↓</div><div>调用 <code>board_init_f_alloc_reserve(sp)</code>：先减去 1 MiB 早期 malloc，再减去并对齐 GD 大小；返回底部地址 <code>A_SPL</code>。</div><div class="value">r0 = A_SPL<br>此时 sp 仍是原值</div>
+      <div class="step">③ ↓</div><div><code>mov sp, r0</code>，随后 <code>mov r9, r0</code>。这是栈指针第一次切换到预留空间底部。</div><div class="value">sp = r9 = A_SPL</div>
+      <div class="step">④ ↓</div><div>调用 <code>board_init_f_init_reserve(A_SPL)</code>：清零 GD，令 <code>gd-&gt;malloc_base = 0x03e00000</code>。</div><div class="value">GD：[A_SPL, 0x03e00000)<br>malloc：[0x03e00000, 0x03f00000)</div>
+      <div class="step">⑤ ↓</div><div><code>board_init_f</code> 进行 SPL 早期初始化；随后 <code>spl_relocate_stack_gd()</code>。此 defconfig 未启用 <code>SPL_STACK_R</code>，返回 0。</div><div class="value">sp、r9 不再因该调用切换</div>
+      <div class="step">⑥</div><div>清零 SPL BSS，进入 <code>board_init_r</code>，装载并跳转到 U-Boot 本体。</div><div class="value">SPL 运行时栈继续从 A_SPL 向低地址生长</div>
+    </div>
+
+    <h2>接着看执行顺序：U-Boot 本体</h2>
+    <div class="timeline" aria-label="U-Boot 本体初始化执行顺序">
+      <div class="step">① ↓</div><div>SPL 按 FIT 的 load 地址将本体装到 <code>0x00200000</code>，跳入本体 <code>_main</code>。</div><div class="value">代码从 0x00200000 运行</div>
+      <div class="step">② ↓</div><div><code>mov sp, CONFIG_SYS_INIT_SP_ADDR</code>，随后调用 <code>board_init_f_alloc_reserve</code>。</div><div class="value">先 sp = 0x00600000<br>函数返回 A_UB</div>
+      <div class="step">③ ↓</div><div><code>mov sp, r0</code>、<code>mov r9, r0</code>；<code>board_init_f_init_reserve</code> 清零 GD 并设置早期 malloc。</div><div class="value">sp = r9 = A_UB<br>malloc：[0x00500000, 0x00600000)</div>
+      <div class="step">④ ↓</div><div><code>board_init_f</code> 获得 DDR 容量，并按下方“最终布局”从顶部向下预留，算出 <code>gd-&gt;relocaddr = R</code> 和 <code>gd-&gt;start_addr_sp = S</code>。</div><div class="value">此时仍在旧代码处运行，旧 sp = A_UB</div>
+      <div class="step">⑤ ↓</div><div><code>crt0.S</code> 切换到最终栈及新 GD，<code>relocate_code</code> 把镜像复制到 R，返回到新位置的 <code>here</code>。</div><div class="value">sp = S；r9 = 新 GD 地址 G</div>
+      <div class="step">⑥</div><div>调整异常向量，清零新位置的 BSS，进入 <code>board_init_r</code>。</div><div class="value">代码在 R 附近运行，正式 malloc 在 [M, R)</div>
+    </div>
+
+    <div class="legend">
+      <span><i style="background:#278365"></i>SPL</span>
+      <span><i style="background:#267eb1"></i>U-Boot 本体</span>
+      <span><i style="background:#c5782a"></i>交接 / 需注意的配置</span>
+      <span><i style="background:#815bb1"></i>运行时计算</span>
+    </div>
+
+    <h2>空间视图一：固定地址与早期内存</h2>
+    <p class="sequence-note">下面仅按地址从高到低排列，不表示执行先后。先按上面的 ①～⑥ 阅读时间顺序。</p>
+    <div class="map">
+      <div class="addr"><span class="marker">CONFIG_SPL_BSS_START_ADDR + CONFIG_SPL_BSS_MAX_SIZE</span><code>0x04000000</code></div><div class="region handoff"><strong>配置的 SPL BSS 上限</strong><small>0x03fe0000 + 0x20000。此地址不是默认 ARM32 SPL 链接脚本中的实际 BSS 末尾。</small></div>
+      <div class="addr"><span class="marker">CONFIG_SPL_BSS_START_ADDR</span><code>0x03fe0000</code></div><div class="region handoff"><strong>CONFIG_SPL_BSS_START_ADDR</strong><small>头文件定义了它，但 RK3506 默认 ARM32 SPL 链接脚本没有引用它；实际 BSS 用 __bss_start / __bss_end 定位。</small></div>
+      <div class="addr"><span class="marker">上界：CONFIG_SPL_BSS_START_ADDR（仅配置值）</span><span class="marker">下界：CONFIG_SPL_TEXT_BASE + CONFIG_SPL_MAX_SIZE</span><code>[0x03f40000, 0x03fe0000)</code></div><div class="region handoff"><strong>未由这些宏固定分配的间隔，640 KiB</strong><small>不能认定它全部空闲；实际 BSS 或附加数据是否进入此范围，须看 SPL 的 map 文件。</small></div>
+      <div class="addr"><span class="marker">上界：CONFIG_SPL_TEXT_BASE + CONFIG_SPL_MAX_SIZE</span><span class="marker">下界：CONFIG_SPL_TEXT_BASE = __image_copy_start</span><code>[0x03f00000, 0x03f40000)</code></div><div class="region spl"><strong>SPL 加载镜像的容量检查范围，256 KiB</strong><small>.text、.rodata、.data 等从 0x03f00000 向上放置；实际 __image_copy_end 早于 0x03f40000。这里的上限不是实际镜像末尾，也不能据此确定 BSS 地址。</small></div>
+      <div class="addr"><span class="marker">CONFIG_SPL_TEXT_BASE</span><span class="marker">CONFIG_SPL_STACK（仅初始 sp）</span><code>0x03f00000</code></div><div class="region spl"><strong>SPL 代码起点；步骤 ① 的初始 sp</strong><small>CONFIG_SPL_TEXT_BASE 与 CONFIG_SPL_STACK 数值相同、用途不同。步骤 ③ 之后 sp = A_SPL；镜像向高地址展开，栈向低地址生长。</small></div>
+      <div class="addr"><span class="marker">上界：CONFIG_SPL_STACK</span><span class="marker">下界：gd-&gt;malloc_base</span><code>[0x03e00000, 0x03f00000)</code></div><div class="region spl"><strong>SPL 早期 malloc，1 MiB</strong><small>board_init_f_alloc_reserve 预留；spl_common_init 使用。DM 等分配在此；SPL 的页表由 memalign(16 KiB, 16 KiB) 从此堆内分配，精确落点动态变化。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;malloc_base</span><span class="marker">下界：r9 = sp = A_SPL</span><code>[A_SPL, 0x03e00000)</code></div><div class="region spl"><strong>SPL 步骤 ③ 之后的 GD 与栈顶</strong><small class="formula">A_SPL = align_down(0x03e00000 - sizeof(gd_t), 16)；此时 r9 = sp = A_SPL，栈继续向下生长。</small></div>
+      <div class="addr"><span class="marker">CONFIG_SYS_INIT_SP_ADDR</span><code>0x00600000</code></div><div class="region uboot"><strong>CONFIG_SYS_INIT_SP_ADDR</strong><small>U-Boot 本体进入 _main 时设定的初始栈顶，随后预留早期 malloc 和 GD。</small></div>
+      <div class="addr"><span class="marker">上界：CONFIG_SYS_INIT_SP_ADDR</span><span class="marker">下界：gd-&gt;malloc_base</span><code>[0x00500000, 0x00600000)</code></div><div class="region uboot"><strong>U-Boot 本体早期 malloc，1 MiB</strong><small>重定位之前使用，包括早期 DM、DTB 等分配。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;malloc_base</span><span class="marker">下界：r9 = sp = A_UB</span><code>[A_UB, 0x00500000)</code></div><div class="region uboot"><strong>U-Boot 本体初始 GD；r9 = sp = A_UB</strong><small class="formula">A_UB = align_down(0x00500000 - sizeof(gd_t), 16)。</small></div>
+      <div class="addr"><span class="marker">CONFIG_SYS_TEXT_BASE</span><code>0x00200000</code></div><div class="region uboot"><strong>CONFIG_SYS_TEXT_BASE</strong><small>SPL 生成的 FIT 使用此地址装载 U-Boot；也是 U-Boot 的链接基址。重定位后 U-Boot 在 DDR 高地址继续执行。</small></div>
+      <div class="addr"><span class="marker">kernel_addr_r</span><code>0x00108000</code></div><div class="region uboot"><strong>kernel_addr_r 默认值</strong><small>后续装载内核用的环境变量；早期阶段不是固定占用区。</small></div>
+      <div class="addr"><span class="marker">fdt_addr_r</span><code>0x00063000</code></div><div class="region uboot"><strong>fdt_addr_r 默认值</strong><small>后续装载设备树用的环境变量；不能与 U-Boot 重定位时预留的 DTB 混为一谈。</small></div>
+      <div class="addr"><span class="marker">上界：ATAGS_PHYS_BASE + ATAGS_SIZE</span><span class="marker">下界：ATAGS_PHYS_BASE</span><code>[0x00062000, 0x00063000)</code></div><div class="region handoff"><strong>Rockchip ATAGS，4 KiB</strong><small>TPL / 预加载器向 SPL、U-Boot 传递启动信息的固定交接区。</small></div>
+      <div class="addr"><span class="marker">CONFIG_SYS_LOAD_ADDR</span><code>0x00008000</code></div><div class="region uboot"><strong>CONFIG_SYS_LOAD_ADDR</strong><small>U-Boot 命令的默认加载地址；不是 U-Boot 镜像的链接或重定位地址。</small></div>
+      <div class="addr"><span class="marker">CONFIG_SYS_SDRAM_BASE</span><code>0x00000000</code></div><div class="region handoff"><strong>CONFIG_SYS_SDRAM_BASE</strong><small>DDR 物理地址起点。实际容量由预加载器信息或 RAM 驱动报告，0xC0000000 是本配置允许使用的上限，不是板上实装容量。</small></div>
+    </div>
+    <p class="note">SPL 的 BSS 另由链接符号 __bss_start = __rel_dyn_start 和 __bss_end 定位，大小受 CONFIG_SPL_BSS_MAX_SIZE 限制；头文件中的 0x03fe0000 不是这份 ARM32 默认链接脚本的实际 BSS 起点。此 defconfig 没有启用 SPL_STACK_R，所以 spl_relocate_stack_gd() 在这里返回 0：SPL 不会在这一步再次搬移栈与 GD。</p>
+
+    <h2 id="uboot-relocation">空间视图二：U-Boot 本体在 board_init_f 中自高向低预留</h2>
+    <p>以下按 <span class="formula">init_sequence_f</span> 的顺序向下排列。每一步的下边界成为下一步的上边界；地址并非按容量绘制比例。</p>
+    <div class="map">
+      <div class="addr"><span class="marker">gd-&gt;ram_top</span><code>T，最大 0xC0000000</code></div><div class="region calc"><strong>DDR 可用顶部</strong><small>由 dram_init / get_effective_memsize 计算，再由 RK3506 的 board_get_usable_ram_top 限制到不超过 0xC0000000。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;ram_top</span><span class="marker">下界：gd-&gt;relocaddr（reserve_pram 后）</span><code>[P, T)</code></div><div class="region handoff"><strong>reserve_pram：保护 RAM</strong><small class="formula">P = T - pram × 1024；pram 环境变量默认 6144 KiB。随后 Q = align_down(P, 4 KiB)。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;relocaddr（reserve_round_4k 后）</span><span class="marker">下界：gd-&gt;arch.tlb_addr</span><code>[A, Q)</code></div><div class="region calc"><strong>reserve_mmu：页表与对齐空间</strong><small class="formula">A = align_down(Q - 16 KiB, 64 KiB)；[A, A+16 KiB) 是一级页表，其上到 Q 可能是对齐空隙。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;arch.tlb_addr</span><span class="marker">下界：gd-&gt;relocaddr（reserve_video 后）</span><code>[V, A)</code></div><div class="region calc"><strong>reserve_video：可能的显示缓冲</strong><small>V 由 video_reserve(&amp;addr) 在运行时确定。没有缓冲预留时 V = A。reserve_trace 在启用 CONFIG_TRACE 时也会插入。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;relocaddr（video / trace 后）</span><span class="marker">下界：gd-&gt;relocaddr（reserve_uboot 后）</span><code>R = align_down(V - gd-&gt;mon_len, 4 KiB)</code></div><div class="region uboot"><strong>reserve_uboot：最终 U-Boot 镜像、数据与 BSS</strong><small class="formula">R = align_down(V - gd-&gt;mon_len, 4 KiB)；gd-&gt;mon_len = __bss_end - _start。复制镜像与清零 BSS 是后续不同动作。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;relocaddr = R</span><span class="marker">下界：gd-&gt;start_addr_sp（reserve_malloc 后）</span><code>[M, R)</code></div><div class="region uboot"><strong>reserve_malloc：正式 malloc 堆</strong><small class="formula">M = R - TOTAL_MALLOC_LEN；CONFIG_SYS_MALLOC_LEN = 16 MiB。实际 TOTAL_MALLOC_LEN 按 include/common.h 的条件定义。</small></div>
+      <div class="addr"><span class="marker">上界：ALIGN(M, MMU_SECTION_SIZE) - MMU_SECTION_SIZE</span><span class="marker">下界：gd-&gt;start_addr_sp（reserve_noncached 后）</span><code>[N, E)，E = align_up(M, 1 MiB) - 1 MiB</code></div><div class="region calc"><strong>reserve_noncached：1 MiB 非缓存池</strong><small class="formula">E = align_up(M, 1 MiB) - 1 MiB；N = E - 1 MiB。[E, M) 是对齐留出的空隙。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;start_addr_sp = N</span><span class="marker">下界：gd-&gt;bd = B</span><code>[B, N)</code></div><div class="region calc"><strong>reserve_board：最终 bd_t</strong><small class="formula">B = N - sizeof(bd_t)；gd-&gt;bd 指向 B。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;bd = B</span><span class="marker">下界：gd-&gt;new_gd = G</span><code>[G, B)</code></div><div class="region calc"><strong>reserve_global_data：最终 GD</strong><small class="formula">G = B - sizeof(gd_t)；gd-&gt;new_gd 指向 G。crt0.S 之后将 r9 切到这个地址。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;new_gd = G</span><span class="marker">下界：gd-&gt;new_fdt = F（若有）</span><code>[F, G)</code></div><div class="region calc"><strong>reserve_fdt：新设备树副本，若 gd-&gt;fdt_blob 非空</strong><small class="formula">gd-&gt;fdt_size = align32(fdt_totalsize + 可选内核 DTB 大小 + 0x1000)；F = align_down(G - gd-&gt;fdt_size - 8, 8)。</small></div>
+      <div class="addr"><span class="marker">上界：gd-&gt;new_fdt = F（若有）</span><span class="marker">下界：gd-&gt;start_addr_sp = S</span><code>F 以下，S 在运行时计算</code></div><div class="region calc"><strong>reserve_stacks：最终普通栈和异常栈</strong><small>先减 16 并按 16 字节对齐；ARM32 再按中断配置预留异常栈。最终地址记在 gd-&gt;start_addr_sp，并在 crt0.S 写入 sp。</small></div>
+    </div>
+    <p class="note">如果启用 CONFIG_BOOTSTAGE，reserve_bootstage 还会在 FDT 与栈之间预留记录区；提供的 rk3506_defconfig 未启用它。最终各个绝对地址需要板上 DDR 容量、实际镜像大小和显示缓冲大小，单凭头文件不能算出。</p>
+    <footer>依据：rk3506_common.h、rk3506_defconfig、arch/arm/lib/crt0.S、arch/arm/cpu/u-boot-spl.lds、common/init/board_init.c、common/board_f.c、common/spl/spl.c、arch/arm/mach-rockchip/sdram.c。TPL 内部布局未分析。</footer>
+  </main>
+</body>
+</html>
