@@ -442,12 +442,12 @@ udevadm info -a -n /dev/sda1      # 查看设备属性（匹配键取值来源�
 
 ## 1.初始化系统
 
-在 Linux 系统中，**初始化系统** 是系统启动时运行的第一个进程，通常被称为 **PID 1**。它负责启动其他所有的系统进程。常见的初始化系统有：
+在 Linux 系统中，**初始化系统** 是系统启动时运行的第一个进程，进程为 **PID 1**。它负责启动其他所有的系统进程。Linux中常见的初始化系统有以下几种：
 
-- **systemd**
+- **Systemd**
   现代 Linux 系统中最常用的初始化系统，拥有丰富的服务管理功能。
 - **SysVinit**
-  systemd 之前的主流初始化系统，较为简单。
+  是Systemd 之前的主流初始化系统，较为简单。
 - **Upstart**
   被 Ubuntu 采用过的一种 init system。
 
@@ -459,13 +459,13 @@ Linux 服务管理历经三代 init 系统，配置目录随代际更替：
 | 过渡 | Upstart | `/etc/init/` | `.conf` job | 已废弃 |
 | 现代 | systemd | `/etc/systemd/` | `.service` 单元 | 当前主流 |
 
-## 2.SysV init
+## 2.SysVinit
 
-本章介绍 SysV init 的运行级别机制，作为理解 systemd 兼容层的基础。
+本章介绍 SysVinit 的运行级别机制，作为理解 systemd 兼容层的基础。
 
-### 1.`/etc/init.d/` 脚本
+### 1.服务脚本
 
-SysV 服务脚本存放在 `/etc/init.d/`，本质是**带参数的 shell 脚本**，支持 `start` / `stop` / `restart` 等参数：
+SysVinit的服务脚本存放在 `/etc/init.d/`目录，其本质是**带参数的shell 脚本**，支持 `start` / `stop` / `restart` 等参数：
 
 ```bash
 /etc/init.d/nginx start    # 启动
@@ -473,9 +473,9 @@ SysV 服务脚本存放在 `/etc/init.d/`，本质是**带参数的 shell 脚本
 /etc/init.d/nginx restart  # 重启
 ```
 
-### 2.运行级别（runlevel）
+### 2.运行级别
 
-脚本存在并不等于开机自启，开机自启需依赖运行级别目录中的软链接。运行级别是 SysV init 定义的系统状态，共 7 个（0~6）：
+运行级别是**系统全局属性**。脚本存在并不等于开机自启，开机自启需依赖运行级别目录中的软链接。运行级别是 SysV init 定义的系统状态，共 7 个（0~6）：
 
 | 级别 | 含义 | 说明 |
 |------|------|------|
@@ -491,9 +491,9 @@ Ubuntu（Debian 系）运行级别特点：2~5 完全等价，均为多用户模
 
 划分多个级别的原因：系统需进入不同状态、运行不同的服务集合。正常使用需完整服务；故障排查需单用户最小环境；关机 / 重启为特殊状态。
 
-### 3.`/etc/rcN.d/` 与 S/K 软链接
+### 3.运行软链接
 
-`/etc/rcN.d/`（N 为运行级别）存放指向 `/etc/init.d/` 的软链接：
+`/etc/rcN.d/`（N 为运行级别）存放指向 `/etc/init.d/`目录下各脚本的软链接：
 
 - **`S` 开头**
   进入该级别时执行（`脚本 start`）
@@ -528,9 +528,9 @@ Ubuntu（Debian 系）运行级别特点：2~5 完全等价，均为多用户模
 | 60~89 | 应用服务 |
 | 90~99 | 业务应用（最后启动，等依赖就绪） |
 
-### 5.启用自启
+### 5.应用自启
 
-实质就是创立软连接，因为脚本放入 `/etc/init.d/` 后不会自动自启，须显式创建软链接：
+实现应用自启动的实质就是创立软连接，因为脚本放入 `/etc/init.d/` 后不会自动自启，还需显式创建软链接：
 
 ```bash
 # Debian/Ubuntu
@@ -545,34 +545,151 @@ chkconfig nginx off          # 禁用
 ### 6.切换运行级别
 
 ```bash
-init 0           # 关机
+init 0           # 等价于关机命令，执行关机
 init 6           # 重启
-init 1           # 进入单用户模式
-telinit 3        # 切换到级别 3
+
+
+init 1           # 进入单用户模式,系统会进入维护状态，通常只挂载根文件系统，停止网络和多用户服务，仅允许 root 用户进行系统修复或维护。
+
+
+root@cqr40:/home/ubuntu# who -r
+         run-level 5  Nov 25 17:05
+root@cqr40:/home/ubuntu# runlevel
+N 5
+root@cqr40:/home/ubuntu# init 1
+root@cqr40:/home/ubuntu# runlevel
+5 1
+root@cqr40:/home/ubuntu# who -r
+         run-level 1  Nov 25 17:07                   last=5
+root@cqr40:/home/ubuntu# 
+
 runlevel         # 查看当前级别
+
+
+telinit 3        # 切换到级别 3
+init 3       	 # 切换到级别 3
 ```
 
-### 7.systemd 的兼容与对应
+### 7.启动脚本
 
-systemd 用 target 取代 runlevel，保留映射：
+#### 1.必须实现的参数
 
-| runlevel | systemd target |
-|----------|----------------|
-| 0 | `poweroff.target` |
-| 1 | `rescue.target` |
-| 3 | `multi-user.target` |
-| 5 | `graphical.target` |
-| 6 | `reboot.target` |
+- `start`：启动服务
+- `stop`：停止服务
+- `restart`：重启服务（先停止再启动）
+- `status`（可选）：查看服务状态
 
-systemd 启动时，`systemd-sysv-generator` 扫描 `/etc/init.d/` 与 `/etc/rcN.d/`，将 SysV 脚本自动转换为 `.service` 单元（标记 `generated`，通常放在 `/run/systemd/generator.late/` 下），并依据 `S` 软链接决定是否开机自启。因此系统虽已迁移至 systemd，`/etc/init.d/` 与 `/etc/rcN.d/` 仍作为兼容层保留。
+#### 2.脚本结构示例
+
+```sh
+#!/bin/sh
+# 服务名：示例服务
+
+case "$1" in
+  start)
+    echo "Starting service..."
+    # 启动命令
+    ;;
+  stop)
+    echo "Stopping service..."
+    # 停止命令
+    ;;
+  restart)
+    $0 stop
+    sleep 1
+    $0 start
+    ;;
+  status)
+    # 检查服务状态的命令
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit 1
+    ;;
+esac
+```
+
+#### 3.应具备的功能
+
+- **启动服务**
+  通常用 `nohup` 或后台启动命令，重定向日志。
+- **停止服务**
+  通常用 `kill` 或 `pkill` 关闭进程。
+- **重启服务**
+  先停止再启动。
+- **状态检查**
+  查看服务是否运行（可选）。
+
+#### 4.脚本权限和注册
+
+- 脚本必须可执行
+
+```bash
+chmod +x /etc/init.d/your_service
+```
+
+- 注册到运行级别启动（Debian/Ubuntu 系统）
+
+```bash
+update-rc.d your_service defaults
+```
+
+- 在 CentOS/RHEL 上
+
+```bash
+chkconfig --add your_service
+```
+
+这会自动创建 `/etc/rcX.d/` 目录下的 `S*` 和 `K*` 软链接。
+
+#### 5.LSB 信息块
+
+这是 LSB（Linux Standard Base）规定的 init 脚本元信息块，供 `insserv`、`update-rc.d` 等工具解析依赖关系、决定启动顺序和运行级别：
+
+- `Provides`：本脚本提供的服务名。
+- `Required-Start/Stop`：启动/停止前必须已就绪的服务。`$local_fs` 本地文件系统、`$remote_fs` 远程文件系统、`$network` 网络、`$syslog` 日志系统；`@svcDepends` 是模板注入的额外依赖。
+- `Default-Start: 2 3 4 5`：在多用户、图形界面等运行级别默认启动。
+- `Default-Stop: 0 1 6`：在关机(0)、单用户(1)、重启(6)时停止。
+
+```bash
+### BEGIN INIT INFO
+# Provides:          @svcName
+# Required-Start:    $local_fs $remote_fs $network $syslog@svcDepends
+# Required-Stop:     $local_fs $remote_fs $network $syslog@svcDepends
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: @svcName daemon script
+### END INIT INFO
+```
+
+#### 6.加载系统库
+
+```bash
+. /lib/init/vars.sh  #. 即 source，在当前 shell 执行该文件，加载VERBOSE等系统自带的rcS 变量
+. /lib/lsb/init-functions #加载 LSB init 函数库，提供 log_daemon_msg、log_end_msg、status_of_proc 等函数
+```
 
 ## 3.Systemd
 
-### 1.`systemd`服务
+### 1.服务介绍
 
-`systemd`是 Linux 系统中广泛使用的系统和服务管理器，它取代了传统的`SysV`，负责系统启动、服务管理、进程监控等核心功能。其设计目标是提高系统启动速度、优化服务依赖管理，并提供更丰富的系统管理能力。适合长期稳定运行的命令，通过系统服务管理器 `systemd` 管理，支持开机自启、日志保存、状态监控等。
+`systemd`是 Linux 系统中广泛使用的系统和服务管理器，它取代了传统的`SysV`，负责系统启动、服务管理、进程监控等核心功能。其设计目标是提高系统启动速度、优化服务依赖管理，并提供更丰富的系统管理能力。适合长期稳定运行的命令，通过 `systemd` 管理，可以支持开机自启、日志保存、状态监控等。
 
-### 2.核心功能与特点
+### 2.SysV兼容
+
+systemd 用 target 取代 runlevel，保留映射：
+
+| runlevel | systemd target      |
+| -------- | ------------------- |
+| 0        | `poweroff.target`   |
+| 1        | `rescue.target`     |
+| 3        | `multi-user.target` |
+| 5        | `graphical.target`  |
+| 6        | `reboot.target`     |
+
+systemd 启动时，`systemd-sysv-generator` 扫描 `/etc/init.d/` 与 `/etc/rcN.d/`，将 SysV 的脚本自动转换为 `.service` 单元（标记 `generated`，通常放在 `/run/systemd/generator.late/` 目录下），并依据 `S` 软链接决定是否开机自启。因此系统虽已迁移至 systemd，但`/etc/init.d/` 与 `/etc/rcN.d/` 仍作为兼容层保留。
+
+### 3.核心功能
 
 systemd 之所以被广泛使用，是因为它带来了更多的系统管理功能，支持并行服务启动、按需加载服务、日志管理等。这让 systemd 成为现代 Linux 发行版的首选。
 
@@ -587,7 +704,7 @@ systemd 之所以被广泛使用，是因为它带来了更多的系统管理功
 5. **依赖管理**
    单元配置中可明确依赖关系（如 `After=network.target` 表示服务在网络启动后运行），<u>避免手动处理启动顺序</u>。
 
-### 3.常用`systemctl`命令
+### 4.systemctl命令
 
 | 命令                                       | 功能描述                                            |
 | ------------------------------------------ | --------------------------------------------------- |

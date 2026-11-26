@@ -385,6 +385,100 @@ Connecting to host localhost, port 5201
   
   kill -9 PID #杀死指定进程号的进程
   ```
+  
+- **守护进程**
+
+  ```bash
+  start-stop-daemon [选项...] Commands
+  #命令决定核心操作，选项用于指定匹配进程的条件或调整行为
+  
+  [Commands]:
+  
+    -S|--start -- <argument> …   #启动进程。它会先检查进程是否已存在，若不存在则启动，并传递参数给它
+  
+    -K|-–stop                   #停止一个程序。它会查找匹配的进程并发送信号（默认 TERM）
+  
+    -T|-–status                 #检查进程状态，返回符合 LSB 规范的退出码。
+  
+    -H|–-help                   #显示帮助信息
+  
+    -V|–-version                #打印版本信息
+   
+   
+   
+  [Matching options (at least one is required)]:
+  # 进程匹配选项（用于定位进程）
+  #为了避免误杀或重复启动，通常需要组合使用这些选项来精确匹配
+  
+    -p|–-pidfile <pid-file>       #通过 PID 文件匹配
+  
+    -x|–-exec <executable>        #通过可执行文件的绝对路径匹配
+  
+    -n|–-name <process-name>      #通过进程名匹配
+  
+    -u|–-user <username|uid>      #匹配指定用户拥有的进程
+  
+  
+  
+  [Options]:
+  #通用行为选项（调整启动/停止细节）
+    -g|–-group <group|gid>        	#仅设置组 ID，将进程的组强制改为另一个特定的组
+  
+    -c|–-chuid <name|uid[:group|gid]> #在启动进程之前切换身份
+  
+    -s|–-signal <signal>          	#配合 --stop 使用，指定发送的信号（默认 TERM）
+  
+    -a|–-startas <pathname>       	#配合 --start 使用，指定实际启动的程序路径（默认为 --exec 的值）
+  
+    -r|–chroot <directory>       #启动前 chroot 到指定目录。注意：PID 文件是在 chroot 之后写入的。
+  
+    -d|–chdir <directory>        #启动前切换工作目录，默认是 /。若同时使用了 --chroot，则此操作在 chroot 之后执行。
+  
+    -N|–nicelevel <incr>         #调整进程的 nice 值
+  
+    -P|–procsched <policy[:prio]>
+  
+                                  use <policy> with <prio> for the kernel 
+  
+                                    process scheduler (default prio is 0)
+  
+    -I|–iosched <class[:prio]>   use <class> with <prio> to set the IO
+  
+                                    scheduler (default prio is 4)
+  
+    -k|–umask <mask>            #启动前设置 umask
+  
+    -b|–-background             #让程序在后台运行（适用于自身不进行后台化的程序）
+  
+    -m|–make-pidfile             当命令本身不创建pidfile时，由start-stop-daemon创建
+  
+    -R, --retry <超时|计划表>    #配合 --stop 使用，用于反复检查进程是否真正终止。
+  
+  指定单个数字（超时）
+  	等价于默认计划表 信号/超时/KILL/超时。其中信号由 --signal 指定（默认 TERM）。
+  指定自定义计划表
+  	格式为用 / 分隔的列表，每项可以是：信号（如 TERM）、等待秒数（如 5）、或 forever（无限重复后续计划）。
+  	例如 TERM/10/KILL/5。
+  若计划表执行完毕（未指定 forever）进程仍未退出，start-stop-daemon 将以错误码 2 退出。
+  一旦指定了计划表，--signal 指定的信号将被忽略。
+  
+    -t|–test                     #测试模式，仅打印将要执行的动作，不实际执行
+  
+    -o|--oknodo                   #如果无需执行任何操作（例如进程本就不存在），则返回退出码 0 而不是 1。即使运行不了daemon，也会exit 0
+  
+    -q|--quiet                    #不要输出警告
+  
+    -v|--verbose                  #输出 start-stop-daemon执行过程（不是daemon的执行过程）
+  ```
+  
+- **环境隔离**
+  `chroot` 是一个 Linux/Unix 命令，用于**改变当前进程及其子进程的根目录**。简单说，它能把一个指定的目录（比如 `/srv/jail`）临时当作系统的“/”根目录来运行程序，使程序只能看到和访问这个“新根”下的文件，从而形成一个隔离环境（常称为 chroot 监狱）。
+
+  ```bash
+  chroot [选项] 新根目录 [命令]
+  ```
+
+  
 
 # 输入输出
 
